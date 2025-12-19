@@ -13,9 +13,10 @@ import java.time.LocalDateTime;
 
 /**
  * MyBatis Plus配置
+ * 注意：只扫描MySQL相关的Repository (mapper包)，MongoDB Repository在单独的mongo包中
  */
 @Configuration
-@MapperScan("com.xinji.repository")
+@MapperScan("com.xinji.mapper")
 public class MyBatisPlusConfig {
     
     /**

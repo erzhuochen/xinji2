@@ -1,7 +1,7 @@
 package com.xinji.security;
 
 import com.xinji.entity.User;
-import com.xinji.repository.UserRepository;
+import com.xinji.mapper.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

@@ -9,7 +9,7 @@ import com.xinji.dto.response.LoginResponse;
 import com.xinji.dto.response.UserProfileResponse;
 import com.xinji.entity.User;
 import com.xinji.exception.BusinessException;
-import com.xinji.repository.UserRepository;
+import com.xinji.mapper.UserRepository;
 import com.xinji.security.JwtUtil;
 import com.xinji.service.UserService;
 import com.xinji.util.AESUtil;

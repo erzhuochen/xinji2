@@ -1,7 +1,7 @@
 package com.xinji.task;
 
 import com.xinji.entity.User;
-import com.xinji.repository.UserRepository;
+import com.xinji.mapper.UserRepository;
 import com.xinji.service.OrderService;
 import com.xinji.service.ReportService;
 import lombok.RequiredArgsConstructor;

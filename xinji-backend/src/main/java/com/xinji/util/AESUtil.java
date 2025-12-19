@@ -26,7 +26,8 @@ public class AESUtil {
         // 确保key和iv为16字节
         byte[] keyBytes = padOrTrim(aesKey.getBytes(StandardCharsets.UTF_8), 16);
         byte[] ivBytes = padOrTrim(aesIv.getBytes(StandardCharsets.UTF_8), 16);
-        this.aes = new AES("CBC", "PKCS7Padding", keyBytes, ivBytes);
+        // 使用 PKCS5Padding (JDK标准支持，与PKCS7Padding在16字节块大小时等效)
+        this.aes = new AES("CBC", "PKCS5Padding", keyBytes, ivBytes);
     }
     
     /**

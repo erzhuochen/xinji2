@@ -8,7 +8,7 @@ import com.xinji.dto.response.PageResponse;
 import com.xinji.entity.Diary;
 import com.xinji.entity.mongo.DiaryContent;
 import com.xinji.exception.BusinessException;
-import com.xinji.repository.DiaryRepository;
+import com.xinji.mapper.DiaryRepository;
 import com.xinji.repository.mongo.DiaryContentRepository;
 import com.xinji.service.DiaryService;
 import com.xinji.util.AESUtil;
