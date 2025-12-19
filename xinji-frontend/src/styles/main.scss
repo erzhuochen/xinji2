@@ -1,0 +1,161 @@
+@import './variables.scss';
+
+// 全局重置
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  font-family: $font-family;
+  font-size: $font-size-md;
+  color: $text-primary;
+  background-color: $background-color;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+// 滚动条美化
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: $border-color;
+  border-radius: 3px;
+  
+  &:hover {
+    background: $secondary-color;
+  }
+}
+
+// Element Plus 主题覆盖
+:root {
+  --el-color-primary: #{$primary-color};
+  --el-color-primary-light-3: #{$primary-light};
+  --el-color-primary-dark-2: #{$primary-dark};
+  --el-border-radius-base: #{$border-radius-md};
+  --el-font-size-base: #{$font-size-md};
+  --el-fill-color-blank: #{$card-background};
+  --el-bg-color: #{$background-color};
+  --el-border-color: #{$border-color};
+  --el-text-color-primary: #{$text-primary};
+  --el-text-color-regular: #{$text-secondary};
+  --el-text-color-placeholder: #{$text-muted};
+}
+
+// 通用类
+.page-container {
+  min-height: 100vh;
+  padding: $spacing-md;
+  background-color: $background-color;
+}
+
+.card {
+  background: $card-background;
+  border-radius: $border-radius-lg;
+  box-shadow: $shadow-sm;
+  padding: $spacing-lg;
+}
+
+.section-title {
+  font-size: $font-size-lg;
+  font-weight: 600;
+  color: $text-primary;
+  margin-bottom: $spacing-md;
+}
+
+.text-primary {
+  color: $primary-color;
+}
+
+.text-secondary {
+  color: $text-secondary;
+}
+
+.text-muted {
+  color: $text-muted;
+}
+
+// 情绪标签颜色
+.emotion-happy { color: $emotion-happy; }
+.emotion-sad { color: $emotion-sad; }
+.emotion-angry { color: $emotion-angry; }
+.emotion-fear { color: $emotion-fear; }
+.emotion-surprise { color: $emotion-surprise; }
+.emotion-disgust { color: $emotion-disgust; }
+.emotion-neutral { color: $emotion-neutral; }
+.emotion-anxious { color: $emotion-anxious; }
+
+.emotion-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: $font-size-sm;
+  font-weight: 500;
+  
+  &.happy { background: rgba($emotion-happy, 0.2); color: darken($emotion-happy, 20%); }
+  &.sad { background: rgba($emotion-sad, 0.2); color: darken($emotion-sad, 10%); }
+  &.angry { background: rgba($emotion-angry, 0.2); color: darken($emotion-angry, 10%); }
+  &.fear { background: rgba($emotion-fear, 0.2); color: darken($emotion-fear, 10%); }
+  &.surprise { background: rgba($emotion-surprise, 0.2); color: darken($emotion-surprise, 15%); }
+  &.disgust { background: rgba($emotion-disgust, 0.2); color: darken($emotion-disgust, 10%); }
+  &.neutral { background: rgba($emotion-neutral, 0.2); color: darken($emotion-neutral, 15%); }
+  &.anxious { background: rgba($emotion-anxious, 0.2); color: darken($emotion-anxious, 20%); }
+}
+
+// 动画
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity $transition-normal;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-enter-active,
+.slide-leave-active {
+  transition: transform $transition-normal;
+}
+
+.slide-enter-from {
+  transform: translateX(100%);
+}
+
+.slide-leave-to {
+  transform: translateX(-100%);
+}
+
+// 安全区域
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+// 空状态
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-xl * 2;
+  color: $text-muted;
+  
+  .empty-icon {
+    font-size: 64px;
+    margin-bottom: $spacing-md;
+    opacity: 0.5;
+  }
+  
+  .empty-text {
+    font-size: $font-size-md;
+  }
+}

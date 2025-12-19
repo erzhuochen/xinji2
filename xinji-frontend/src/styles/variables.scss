@@ -1,0 +1,60 @@
+// 心迹 - 主色调配置
+// 柔和蓝、灰、米白 - 简洁、温暖、低刺激
+
+// 颜色变量
+$primary-color: #6B8DD6;        // 柔和蓝
+$primary-light: #A8C0E8;        // 浅蓝
+$primary-dark: #4A6BB3;         // 深蓝
+$secondary-color: #8E9AAF;      // 灰蓝
+$background-color: #F8F9FA;     // 米白背景
+$card-background: #FFFFFF;      // 卡片背景
+$text-primary: #2C3E50;         // 主文字颜色
+$text-secondary: #6C757D;       // 次要文字
+$text-muted: #ADB5BD;           // 辅助文字
+$border-color: #E9ECEF;         // 边框颜色
+$success-color: #7BC67E;        // 成功/积极情绪
+$warning-color: #F5C26B;        // 警告
+$danger-color: #E57373;         // 危险/负面情绪
+$info-color: #6BB3D6;           // 信息
+
+// 情绪颜色
+$emotion-happy: #FFD93D;        // 快乐 - 明黄
+$emotion-sad: #7986CB;          // 悲伤 - 蓝紫
+$emotion-angry: #EF5350;        // 愤怒 - 红
+$emotion-fear: #9575CD;         // 恐惧 - 紫
+$emotion-surprise: #FF8A65;     // 惊讶 - 橙
+$emotion-disgust: #8D6E63;      // 厌恶 - 棕
+$emotion-neutral: #90A4AE;      // 平静 - 灰蓝
+$emotion-anxious: #FFB74D;      // 焦虑 - 黄橙
+
+// 间距
+$spacing-xs: 4px;
+$spacing-sm: 8px;
+$spacing-md: 16px;
+$spacing-lg: 24px;
+$spacing-xl: 32px;
+
+// 圆角
+$border-radius-sm: 4px;
+$border-radius-md: 8px;
+$border-radius-lg: 12px;
+$border-radius-xl: 16px;
+
+// 阴影
+$shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+$shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+$shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+
+// 字体
+$font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+$font-size-xs: 12px;
+$font-size-sm: 14px;
+$font-size-md: 16px;
+$font-size-lg: 18px;
+$font-size-xl: 20px;
+$font-size-xxl: 24px;
+
+// 过渡
+$transition-fast: 0.15s ease;
+$transition-normal: 0.3s ease;
+$transition-slow: 0.5s ease;

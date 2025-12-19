@@ -1,0 +1,109 @@
+# 心迹 (XinJi) Docker Compose 配置
+version: '3.8'
+
+services:
+  # 前端服务
+  frontend:
+    build:
+      context: ./xinji-frontend
+      dockerfile: Dockerfile
+    container_name: xinji-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - xinji-network
+    restart: unless-stopped
+
+  # 后端服务
+  backend:
+    build:
+      context: ./xinji-backend
+      dockerfile: Dockerfile
+    container_name: xinji-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/xinji?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+      - SPRING_DATASOURCE_USERNAME=xinji
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD:-xinji123456}
+      - SPRING_DATA_MONGODB_URI=mongodb://mongo:27017/xinji
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - JWT_SECRET=${JWT_SECRET:-your-256-bit-secret-key-here-change-it}
+      - AES_SECRET=${AES_SECRET:-your-aes-secret-key-16}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongo:
+        condition: service_started
+      redis:
+        condition: service_started
+    networks:
+      - xinji-network
+    volumes:
+      - backend-logs:/app/logs
+    restart: unless-stopped
+
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    container_name: xinji-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - MYSQL_DATABASE=xinji
+      - MYSQL_USER=xinji
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-xinji123456}
+      - TZ=Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./xinji-backend/docs/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - xinji-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root123456}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # MongoDB
+  mongo:
+    image: mongo:6.0
+    container_name: xinji-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - xinji-network
+    restart: unless-stopped
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: xinji-redis
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - xinji-network
+    restart: unless-stopped
+
+networks:
+  xinji-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  mongo-data:
+  redis-data:
+  backend-logs:
