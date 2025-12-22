@@ -3,7 +3,9 @@
     <div class="login-container">
       <!-- Logo区域 -->
       <div class="logo-section">
-        <div class="logo-icon">心</div>
+        <!-- <div class="logo-icon"> -->
+          <img src="@/assets/logo.png" alt="Logo" width="48" height="48" />
+        <!-- </div> -->
         <h1 class="logo-title">心迹</h1>
         <p class="logo-subtitle">记录心情，见证成长</p>
       </div>
@@ -155,7 +157,7 @@ const handleLogin = async () => {
     userStore.setToken(res.data.data.token)
     
     // 获取用户信息
-    await userStore.fetchUserInfo()
+    // await userStore.fetchUserInfo()
     
     ElMessage.success('登录成功')
     
@@ -248,7 +250,7 @@ const showAgreement = (type: string) => {
     height: 48px;
     font-size: 16px;
     border-radius: 12px;
-    background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+    // background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
     border: none;
 
     &:hover {

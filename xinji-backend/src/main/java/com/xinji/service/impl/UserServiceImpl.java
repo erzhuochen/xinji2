@@ -275,7 +275,8 @@ public class UserServiceImpl implements UserService {
         // 检查小时限制
         Object hourCount = redisTemplate.opsForValue().get(hourKey);
         if (hourCount != null && Integer.parseInt(hourCount.toString()) >= hourlyLimit) {
-            throw BusinessException.tooManyRequests("请求过于频繁，请1小时后重试");
+            // TODO: 开发时关闭
+//            throw BusinessException.tooManyRequests("请求过于频繁，请1小时后重试");
         }
         
         // 检查天限制
