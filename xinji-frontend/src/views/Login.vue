@@ -3,9 +3,7 @@
     <div class="login-container">
       <!-- Logo区域 -->
       <div class="logo-section">
-        <!-- <div class="logo-icon"> -->
-          <img src="@/assets/logo.png" alt="Logo" width="48" height="48" />
-        <!-- </div> -->
+        <img src="@/assets/logo.png" alt="Logo" width="48" height="48" />
         <h1 class="logo-title">心迹</h1>
         <p class="logo-subtitle">记录心情，见证成长</p>
       </div>
@@ -145,19 +143,20 @@ const handleLogin = async () => {
     ElMessage.warning('请先同意用户协议和隐私政策')
     return
   }
-
+  // 表单校验
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
 
   loading.value = true
   try {
+    // 向后端发送登录请求
     const res = await login(form.value.phone, form.value.code)
     
     // 保存Token
     userStore.setToken(res.data.data.token)
     
     // 获取用户信息
-    // await userStore.fetchUserInfo()
+    await userStore.fetchUserProfile()
     
     ElMessage.success('登录成功')
     
