@@ -14,6 +14,8 @@ export const useUserStore = defineStore('user', () => {
   const todayAiQuota = computed(() => userInfo.value?.todayAiQuota || 5)
   const usedAiQuota = computed(() => userInfo.value?.usedAiQuota || 0)
   const remainingAiQuota = computed(() => Math.max(0, todayAiQuota.value - usedAiQuota.value))
+  const diaryCount = computed(() => userInfo.value?.diaryCount || 0)
+  const remainingQuota = computed(() => remainingAiQuota.value) // 别名
   
   // 方法
   const setToken = (newToken: string) => {
@@ -72,6 +74,8 @@ export const useUserStore = defineStore('user', () => {
     todayAiQuota,
     usedAiQuota,
     remainingAiQuota,
+    diaryCount,
+    remainingQuota,
     // 方法
     setToken,
     clearToken,

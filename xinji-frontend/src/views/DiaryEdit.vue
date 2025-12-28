@@ -220,7 +220,7 @@ const doAnalysis = async () => {
 const goToDetail = () => {
   showAnalysisDialog.value = false
   if (savedDiaryId.value) {
-    router.push(`/diary/detail/${savedDiaryId.value}`)
+    router.push(`/diary/${savedDiaryId.value}`)
   } else {
     router.push('/diary')
   }

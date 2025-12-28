@@ -193,7 +193,7 @@ const loadMore = () => {
 
 // 查看日记
 const viewDiary = (id: string) => {
-  router.push(`/diary/detail/${id}`)
+  router.push(`/diary/${id}`)
 }
 
 // 创建日记
@@ -226,14 +226,15 @@ const getEmotionColor = (emotion: string) => {
 
 onMounted(() => {
   fetchDiaries()
-  userStore.fetchUserInfo()
+  userStore.fetchUserProfile()
 })
 </script>
 
 <style lang="scss" scoped>
 .diary-list-page {
-  padding: 16px;
-  padding-bottom: 100px;
+  padding: 0;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 // 统计卡片
@@ -241,10 +242,10 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-around;
-  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+  background: linear-gradient(135deg, #6B8DD6, #8BA4E0);
   border-radius: 16px;
-  padding: 20px;
-  margin-bottom: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
   color: #fff;
 
   .stat-item {
@@ -254,7 +255,7 @@ onMounted(() => {
     gap: 4px;
 
     .stat-value {
-      font-size: 24px;
+      font-size: 28px;
       font-weight: 600;
 
       &.is-pro {
@@ -263,14 +264,14 @@ onMounted(() => {
     }
 
     .stat-label {
-      font-size: 12px;
-      opacity: 0.8;
+      font-size: 13px;
+      opacity: 0.85;
     }
   }
 
   .stat-divider {
     width: 1px;
-    height: 32px;
+    height: 40px;
     background: rgba(255, 255, 255, 0.3);
   }
 }
@@ -278,57 +279,65 @@ onMounted(() => {
 // 筛选区域
 .filter-section {
   display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 16px;
+  margin-bottom: 24px;
 
   .el-date-picker {
     flex: 1;
+    max-width: 320px;
   }
 
   .el-input {
     flex: 1;
-    max-width: 160px;
+    max-width: 240px;
   }
+}
+
+// 日记列表 - 网格布局
+.diary-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
 }
 
 // 日记卡片
 .diary-card {
   background: #fff;
   border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 12px;
+  padding: 20px;
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
+  border: 1px solid #E9ECEF;
 
   &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
   }
 
   .diary-header {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
 
     .diary-date {
-      font-size: 12px;
-      color: var(--text-secondary);
+      font-size: 13px;
+      color: #6C757D;
     }
 
     .emotion-badge {
-      font-size: 11px;
+      font-size: 12px;
       color: #fff;
-      padding: 2px 8px;
-      border-radius: 10px;
+      padding: 3px 10px;
+      border-radius: 12px;
     }
   }
 
   .diary-title {
-    font-size: 16px;
-    font-weight: 500;
-    color: var(--text-primary);
-    margin: 0 0 8px;
+    font-size: 17px;
+    font-weight: 600;
+    color: #2C3E50;
+    margin: 0 0 10px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -336,79 +345,86 @@ onMounted(() => {
 
   .diary-preview {
     font-size: 14px;
-    color: var(--text-secondary);
+    color: #6C757D;
     margin: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
+    line-height: 1.6;
   }
 
   .diary-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-top: 12px;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #E9ECEF;
 
     .diary-time {
       font-size: 12px;
-      color: var(--text-tertiary);
+      color: #ADB5BD;
     }
 
     .analyzed-icon {
-      color: var(--primary-color);
+      color: #6B8DD6;
     }
   }
 }
 
 // 空状态
 .empty-state {
+  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
+  padding: 80px 20px;
   text-align: center;
 
   p {
     margin: 16px 0 0;
-    color: var(--text-secondary);
+    color: #6C757D;
+    font-size: 16px;
   }
 
   .empty-hint {
-    font-size: 13px;
-    color: var(--text-tertiary);
+    font-size: 14px;
+    color: #ADB5BD;
     margin-top: 8px;
   }
 }
 
 // 加载更多
 .load-more {
+  grid-column: 1 / -1;
   text-align: center;
-  padding: 16px 0;
+  padding: 20px 0;
 }
 
 // 浮动按钮
 .fab {
   position: fixed;
-  right: 20px;
-  bottom: 80px;
-  width: 56px;
-  height: 56px;
+  right: 32px;
+  bottom: 32px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+  background: linear-gradient(135deg, #6B8DD6, #8BA4E0);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(156, 39, 176, 0.4);
+  box-shadow: 0 6px 20px rgba(107, 141, 214, 0.4);
   transition: transform 0.2s, box-shadow 0.2s;
+  z-index: 100;
 
   &:hover {
-    transform: scale(1.05);
-    box-shadow: 0 6px 20px rgba(156, 39, 176, 0.5);
+    transform: scale(1.08);
+    box-shadow: 0 8px 28px rgba(107, 141, 214, 0.5);
   }
 
   &:active {
@@ -416,9 +432,18 @@ onMounted(() => {
   }
 }
 
-@media (min-width: 768px) {
-  .fab {
-    right: calc(50% - 240px + 20px);
+@media (max-width: 768px) {
+  .diary-list {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-section {
+    flex-direction: column;
+
+    .el-date-picker,
+    .el-input {
+      max-width: 100%;
+    }
   }
 }
 </style>
