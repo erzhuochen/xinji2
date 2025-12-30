@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
@@ -49,12 +50,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         List<SimpleGrantedAuthority> authorities = Collections.singletonList(
                                 new SimpleGrantedAuthority("PRO".equals(user.getMemberStatus()) ? "ROLE_PRO" : "ROLE_FREE")
                         );
-                        
+                        SecurityContext context = SecurityContextHolder.createEmptyContext();
                         UsernamePasswordAuthenticationToken authentication = 
                                 new UsernamePasswordAuthenticationToken(user, null, authorities);
                         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                        
-                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                        context.setAuthentication(authentication);
+
+                        SecurityContextHolder.setContext(context);
                     }
                 }
             }

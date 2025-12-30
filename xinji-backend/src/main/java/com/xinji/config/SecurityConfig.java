@@ -52,12 +52,18 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             // 禁用CSRF(使用JWT无状态认证)
+//            SCRF(Cross-Site Request Forgery，跨站请求伪造)是一种攻击方式，攻击者通过伪造用户请求，诱使用户在不知情的情况下执行非本意的操作。
+//            由于本应用使用JWT进行认证，且不依赖于服务器端的Session状态，因此禁用CSRF保护是合理的。
+//            这样可以简化请求处理流程，避免不必要的复杂性，同时确保应用的安全性。
             .csrf(AbstractHttpConfigurer::disable)
             
             // 配置CORS
+            // CORS(Cross-Origin Resource Sharing，跨域资源共享)是一种机制，允许受限资源（如API）在一个域上被另一个域的网页访问。
+            // 通过配置CORS，可以控制哪些外部域名可以访问应用的资源，从而增强安全性。
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             
             // 无状态Session
+            // sessionManagement配置为STATELESS，表示应用不依赖于服务器端的Session来存储用户状态。
             .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             
