@@ -70,7 +70,7 @@ aes:
 # 阿里云百炼AI配置
 aliyun:
   dashscope:
-    api-key: ${DASHSCOPE_API_KEY:your-api-key}
+    api-key: ${DASHSCOPE_API_KEY:sk-13a45a9b9ba04475ade4a999a51e1501}
     model: qwen-plus
     timeout: 10000
     max-retries: 3
