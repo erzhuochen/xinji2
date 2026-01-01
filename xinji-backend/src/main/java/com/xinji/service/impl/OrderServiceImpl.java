@@ -59,7 +59,7 @@ public class OrderServiceImpl implements OrderService {
         
         // 创建订单
         Order order = new Order();
-        order.setOrderId(orderId);
+        order.setId(orderId);
         order.setUserId(userId);
         order.setPlanType(request.getPlanType());
         order.setAmount(amount);
@@ -229,7 +229,7 @@ public class OrderServiceImpl implements OrderService {
         }
         
         List<String> orderIds = expiredOrders.stream()
-                .map(Order::getOrderId)
+                .map(Order::getId)
                 .collect(Collectors.toList());
         
         int updated = orderRepository.batchUpdateExpired(orderIds);
@@ -297,7 +297,7 @@ public class OrderServiceImpl implements OrderService {
      */
     private OrderResponse convertToResponse(Order order) {
         OrderResponse response = new OrderResponse();
-        response.setOrderId(order.getOrderId());
+        response.setOrderId(order.getId());
         response.setUserId(order.getUserId());
         response.setPlanType(order.getPlanType());
         response.setAmount(order.getAmount());

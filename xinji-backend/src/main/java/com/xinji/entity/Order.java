@@ -16,7 +16,9 @@ public class Order {
      * 订单ID
      */
     @TableId(type = IdType.INPUT)
-    private String orderId;
+    private String id;
+
+    private String orderNo;
     
     /**
      * 用户ID
@@ -62,6 +64,8 @@ public class Order {
      * 订单过期时间(15分钟)
      */
     private LocalDateTime expireAt;
+
+    private int deleted;
     
     /**
      * 创建时间

@@ -129,6 +129,12 @@ import { useDiaryStore } from '@/store/diary'
 import { getDiaryList } from '@/api/diary'
 import { EmotionMap, EmotionColorMap } from '@/types'
 import dayjs from 'dayjs'
+import isToday from 'dayjs/plugin/isToday'
+import isYesterday from 'dayjs/plugin/isYesterday'
+
+// 扩展 dayjs 插件
+dayjs.extend(isToday)
+dayjs.extend(isYesterday)
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -160,15 +166,31 @@ const fetchDiaries = async (append = false) => {
       keyword: keyword.value || undefined
     })
 
-    if (append) {
-      diaryStore.diaryList.push(...res.data.list)
-    } else {
-      diaryStore.diaryList = res.data.list
+    const pageData = res.data
+
+    // 数据验证
+    if (!pageData || !Array.isArray(pageData.list)) {
+      console.warn('API 返回数据格式异常:', pageData)
+      if (!append) {
+        diaryStore.diaryList = []
+      }
+      hasMore.value = false
+      return
     }
 
-    hasMore.value = diaryStore.diaryList.length < res.data.total
+    if (append) {
+      diaryStore.diaryList.push(...pageData.list)
+    } else {
+      diaryStore.diaryList = pageData.list
+    }
+    hasMore.value = diaryStore.diaryList.length < pageData.total
   } catch (error) {
     console.error('获取日记列表失败:', error)
+    // 确保即使出错也清空加载状态
+    if (!append) {
+      diaryStore.diaryList = []
+      hasMore.value = false
+    }
   } finally {
     loading.value = false
     loadingMore.value = false

@@ -44,9 +44,9 @@ public class DiaryServiceImpl implements DiaryService {
     public DiaryResponse create(String userId, DiaryRequest request) {
         // 检查创建频率限制(1分钟1条)
         String limitKey = CREATE_LIMIT_PREFIX + userId;
-        if (Boolean.TRUE.equals(redisTemplate.hasKey(limitKey))) {
-            throw BusinessException.tooManyRequests("创建过于频繁，请1分钟后重试");
-        }
+//        if (Boolean.TRUE.equals(redisTemplate.hasKey(limitKey))) {
+//            throw BusinessException.tooManyRequests("创建过于频繁，请1分钟后重试");
+//        }
         
         // 创建日记元数据(MySQL)
         Diary diary = new Diary();

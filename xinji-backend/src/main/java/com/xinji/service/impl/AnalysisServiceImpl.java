@@ -95,9 +95,9 @@ public class AnalysisServiceImpl implements AnalysisService {
         
         // 检查分析锁(同一日记2分钟内不能重复分析)
         String lockKey = ANALYSIS_LOCK_PREFIX + diaryId;
-        if (Boolean.TRUE.equals(redisTemplate.hasKey(lockKey))) {
-            throw BusinessException.tooManyRequests("分析请求过于频繁，请2分钟后重试");
-        }
+//        if (Boolean.TRUE.equals(redisTemplate.hasKey(lockKey))) {
+//            throw BusinessException.tooManyRequests("分析请求过于频繁，请2分钟后重试");
+//        }
         
         // 获取日记内容
         DiaryContent content = diaryContentRepository.findById(diaryId)
