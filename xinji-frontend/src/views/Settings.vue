@@ -123,7 +123,7 @@
               </el-button>
             </div>
           </el-form-item>
-          <el-form-item label="请输入"确认注销"">
+          <el-form-item label="请输入「确认注销」">
             <el-input v-model="deleteForm.confirmText" placeholder="确认注销" />
           </el-form-item>
         </el-form>
