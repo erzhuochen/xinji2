@@ -41,8 +41,8 @@ public interface OrderRepository extends BaseMapper<Order> {
      */
     @Update("<script>" +
             "UPDATE t_order SET status = 'EXPIRED', update_time = NOW() " +
-            "WHERE order_id IN " +
-            "<foreach collection='orderIds' item='id' open='(' separator=',' close=')'>" +
+            "WHERE id IN " +
+            "<foreach collection='orderIds' item='id' open='(' separator=',' close=')'>"+
             "#{id}" +
             "</foreach>" +
             "</script>")

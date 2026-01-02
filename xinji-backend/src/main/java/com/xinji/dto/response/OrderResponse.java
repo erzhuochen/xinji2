@@ -12,6 +12,8 @@ public class OrderResponse {
     
     private String orderId;
     
+    private String orderNo;
+    
     private String userId;
     
     /**

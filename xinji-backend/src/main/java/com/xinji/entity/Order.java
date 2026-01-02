@@ -13,11 +13,14 @@ import java.time.LocalDateTime;
 public class Order {
     
     /**
-     * 订单ID
+     * 订单ID (UUID)
      */
     @TableId(type = IdType.INPUT)
     private String id;
-
+    
+    /**
+     * 订单号 (业务订单号，如 XJ202601021234560001)
+     */
     private String orderNo;
     
     /**
@@ -64,8 +67,6 @@ public class Order {
      * 订单过期时间(15分钟)
      */
     private LocalDateTime expireAt;
-
-    private int deleted;
     
     /**
      * 创建时间
@@ -78,4 +79,10 @@ public class Order {
      */
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
+    
+    /**
+     * 是否删除: 0-否, 1-是
+     */
+    @TableLogic
+    private Integer deleted;
 }

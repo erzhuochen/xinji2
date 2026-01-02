@@ -54,12 +54,14 @@ public class OrderServiceImpl implements OrderService {
         // 计算订单金额
         BigDecimal amount = calculateAmount(request.getPlanType());
         
-        // 生成订单号
-        String orderId = generateOrderId();
+        // 生成订单ID(UUID)和订单号
+        String orderId = IdUtil.fastSimpleUUID();
+        String orderNo = generateOrderNo();
         
         // 创建订单
         Order order = new Order();
         order.setId(orderId);
+        order.setOrderNo(orderNo);
         order.setUserId(userId);
         order.setPlanType(request.getPlanType());
         order.setAmount(amount);
@@ -201,7 +203,7 @@ public class OrderServiceImpl implements OrderService {
         record.setAmount(order.getAmount());
         record.setTransactionId(transactionId);
         record.setStatus("PAID");
-        record.setPaidAt(LocalDateTime.now());
+//        record.setPaidAt(LocalDateTime.now());
         record.setCallbackData(requestBody);
         paymentRecordRepository.insert(record);
         
@@ -253,12 +255,12 @@ public class OrderServiceImpl implements OrderService {
     }
     
     /**
-     * 生成订单号
+     * 生成订单号(业务订单号，非主键)
      */
-    private String generateOrderId() {
+    private String generateOrderNo() {
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
-        String random = String.format("%03d", (int) (Math.random() * 1000));
-        return "o" + timestamp + random;
+        String random = String.format("%04d", (int) (Math.random() * 10000));
+        return "XJ" + timestamp + random;
     }
     
     /**
@@ -298,6 +300,7 @@ public class OrderServiceImpl implements OrderService {
     private OrderResponse convertToResponse(Order order) {
         OrderResponse response = new OrderResponse();
         response.setOrderId(order.getId());
+        response.setOrderNo(order.getOrderNo());
         response.setUserId(order.getUserId());
         response.setPlanType(order.getPlanType());
         response.setAmount(order.getAmount());

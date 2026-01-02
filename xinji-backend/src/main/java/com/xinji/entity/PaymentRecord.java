@@ -44,19 +44,20 @@ public class PaymentRecord {
     private String transactionId;
     
     /**
-     * 支付状态: UNPAID-未支付, PAID-已支付, REFUNDING-退款中, REFUNDED-已退款
+     * 支付状态: PENDING-待支付, SUCCESS-成功, FAILED-失败
      */
     private String status;
-    
-    /**
-     * 支付时间
-     */
-    private LocalDateTime paidAt;
     
     /**
      * 回调数据(JSON)
      */
     private String callbackData;
+    
+    /**
+     * 是否删除: 0-否, 1-是
+     */
+    @TableLogic
+    private Integer deleted;
     
     /**
      * 创建时间
