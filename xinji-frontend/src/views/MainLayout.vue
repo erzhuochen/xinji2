@@ -67,7 +67,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, EditPen, DataAnalysis, User, Setting, Medal } from '@element-plus/icons-vue'
+import { ArrowLeft, EditPen, DataAnalysis, User, Setting, Medal, Guide } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 
 const route = useRoute()
@@ -87,7 +87,8 @@ const navItems = [
   { path: '/report', label: '情绪周报', icon: DataAnalysis },
   { path: '/insights', label: '深度洞察', icon: Medal },
   { path: '/profile', label: '个人中心', icon: User },
-  { path: '/settings', label: '设置', icon: Setting }
+  { path: '/settings', label: '设置', icon: Setting },
+  { path: '/mental-training', label: '心理训练', icon: Guide }
 ]
 
 // 页面标题映射
