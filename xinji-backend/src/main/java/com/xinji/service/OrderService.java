@@ -46,6 +46,11 @@ public interface OrderService {
     OrderResponse queryPaymentStatus(String userId, String orderId);
     
     /**
+     * 模拟支付成功(测试用)
+     */
+    OrderResponse mockPaySuccess(String userId, String orderId);
+    
+    /**
      * 取消超时订单(定时任务)
      */
     void cancelExpiredOrders();

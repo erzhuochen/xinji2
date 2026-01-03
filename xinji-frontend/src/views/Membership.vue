@@ -123,7 +123,7 @@ import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Check } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
-import { createOrder, wechatPrepay } from '@/api/order'
+import { createOrder, mockPaySuccess } from '@/api/order'
 import dayjs from 'dayjs'
 
 const userStore = useUserStore()
@@ -187,11 +187,13 @@ const handlePurchase = async () => {
     const orderRes = await createOrder(selectedPlan.value, autoRenew.value)
     const order = orderRes.data
 
-    // 调起支付
-    const payRes = await wechatPrepay(order.orderId)
+    // 测试阶段：直接调用模拟支付
+    await mockPaySuccess(order.orderId)
     
-    // TODO: 调用微信支付SDK
-    ElMessage.info('微信支付功能开发中，请稍后重试')
+    ElMessage.success('购买成功，已开通PRO会员')
+    
+    // 刷新用户信息
+    await userStore.fetchUserProfile()
     
   } catch (error) {
     console.error('购买失败:', error)
@@ -205,11 +207,15 @@ const handleRenew = async () => {
   purchasing.value = true
   try {
     const orderRes = await createOrder(selectedPlan.value, false)
-    const payRes = await wechatPrepay(orderRes.data.orderId)
     
-    // TODO: 调用微信支付SDK
-    ElMessage.info('微信支付功能开发中，请稍后重试')
+    // 测试阶段：直接调用模拟支付
+    await mockPaySuccess(orderRes.data.orderId)
+    
+    ElMessage.success('续费成功')
     showRenewDialog.value = false
+    
+    // 刷新用户信息
+    await userStore.fetchUserProfile()
   } catch (error) {
     console.error('续费失败:', error)
   } finally {
@@ -429,7 +435,7 @@ const handleRenew = async () => {
     height: 48px;
     font-size: 16px;
     border-radius: 12px;
-    background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+    // background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
     border: none;
   }
 

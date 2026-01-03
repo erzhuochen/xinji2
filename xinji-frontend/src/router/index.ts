@@ -138,10 +138,17 @@ router.beforeEach(async (to, from, next) => {
   }
   
   // 检查是否需要Pro权限
-  if (to.meta.requiresPro && !userStore.isPro) {
-    ElMessage.warning('此功能仅限Pro会员使用')
-    next({ name: 'Membership' })
-    return
+  if (to.meta.requiresPro) {
+    // 确保用户信息已加载
+    if (!userStore.userInfo) {
+      await userStore.fetchUserProfile()
+    }
+    
+    if (!userStore.isPro) {
+      ElMessage.warning('此功能仅限Pro会员使用')
+      next({ name: 'Membership' })
+      return
+    }
   }
   
   next()

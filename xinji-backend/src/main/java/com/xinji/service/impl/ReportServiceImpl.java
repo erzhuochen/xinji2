@@ -57,7 +57,7 @@ public class ReportServiceImpl implements ReportService {
         String cacheKey = WEEKLY_REPORT_CACHE_PREFIX + userId + ":" + startDate;
         Object cached = redisTemplate.opsForValue().get(cacheKey);
         if (cached instanceof WeeklyReportResponse) {
-            return (WeeklyReportResponse) cached;
+//            return (WeeklyReportResponse) cached;
         }
         
         // 查询该周的日记
@@ -198,6 +198,7 @@ public class ReportServiceImpl implements ReportService {
                 // 提取关键词
                 List<String> allKeywords = analysisResults.stream()
                         .flatMap(ar -> ar.getKeywords() != null ? ar.getKeywords().stream() : java.util.stream.Stream.empty())
+                        .filter(k -> k != null)
                         .collect(Collectors.groupingBy(k -> k, Collectors.counting()))
                         .entrySet().stream()
                         .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
@@ -245,14 +246,21 @@ public class ReportServiceImpl implements ReportService {
             if (diary.getAnalyzed() == 1 && resultMap.containsKey(diary.getId())) {
                 AnalysisResult ar = resultMap.get(diary.getId());
                 
+                // 跳过没有情绪分析结果的记录
+                if (ar.getPrimaryEmotion() == null) {
+                    continue;
+                }
+                
                 WeeklyReportResponse.EmotionTrendItem item = new WeeklyReportResponse.EmotionTrendItem();
                 item.setDate(diary.getDiaryDate());
                 item.setEmotion(ar.getPrimaryEmotion());
-                item.setIntensity(ar.getEmotionIntensity());
+                item.setIntensity(ar.getEmotionIntensity() != null ? ar.getEmotionIntensity() : 0.5);
                 emotionTrend.add(item);
                 
                 emotionDistribution.merge(ar.getPrimaryEmotion(), 1, Integer::sum);
-                totalIntensity += ar.getEmotionIntensity();
+                if (ar.getEmotionIntensity() != null) {
+                    totalIntensity += ar.getEmotionIntensity();
+                }
             }
         }
         
@@ -272,6 +280,7 @@ public class ReportServiceImpl implements ReportService {
         // 关键词统计
         List<String> keywords = analysisResults.stream()
                 .flatMap(ar -> ar.getKeywords() != null ? ar.getKeywords().stream() : java.util.stream.Stream.empty())
+                .filter(k -> k != null)
                 .collect(Collectors.groupingBy(k -> k, Collectors.counting()))
                 .entrySet().stream()
                 .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
@@ -301,6 +310,7 @@ public class ReportServiceImpl implements ReportService {
         // 情绪模式分析
         if (!analysisResults.isEmpty()) {
             Map<String, Long> emotionCounts = analysisResults.stream()
+                    .filter(ar -> ar.getPrimaryEmotion() != null)
                     .collect(Collectors.groupingBy(AnalysisResult::getPrimaryEmotion, Collectors.counting()));
             
             String dominantEmotion = emotionCounts.entrySet().stream()
@@ -319,7 +329,7 @@ public class ReportServiceImpl implements ReportService {
             // 认知模式分析
             Map<String, Long> distortionCounts = analysisResults.stream()
                     .flatMap(ar -> ar.getCognitiveDistortions() != null ? ar.getCognitiveDistortions().stream() : java.util.stream.Stream.empty())
-                    .filter(cd -> !"NONE".equals(cd.getType()))
+                    .filter(cd -> cd.getType() != null && !"NONE".equals(cd.getType()))
                     .collect(Collectors.groupingBy(AnalysisResult.CognitiveDistortion::getType, Collectors.counting()));
             
             if (!distortionCounts.isEmpty()) {

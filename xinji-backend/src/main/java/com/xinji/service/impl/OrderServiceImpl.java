@@ -220,6 +220,60 @@ public class OrderServiceImpl implements OrderService {
     
     @Override
     @Transactional
+    public OrderResponse mockPaySuccess(String userId, String orderId) {
+        log.info("【测试】模拟支付成功: orderId={}", orderId);
+        
+        Order order = orderRepository.selectById(orderId);
+        
+        if (order == null) {
+            throw BusinessException.notFound("订单不存在");
+        }
+        
+        if (!order.getUserId().equals(userId)) {
+            throw BusinessException.forbidden("无权操作该订单");
+        }
+        
+        if ("PAID".equals(order.getStatus())) {
+            log.info("订单已支付，无需重复处理: {}", orderId);
+            return convertToResponse(order);
+        }
+        
+        if (!"PENDING".equals(order.getStatus())) {
+            throw BusinessException.badRequest("订单状态不允许支付");
+        }
+        
+        // 模拟交易号
+        String transactionId = "MOCK_" + System.currentTimeMillis();
+        
+        // 更新订单状态
+        order.setStatus("PAID");
+        order.setPaymentMethod("MOCK");
+        order.setTransactionId(transactionId);
+        order.setPaidAt(LocalDateTime.now());
+        orderRepository.updateById(order);
+        
+        // 创建支付流水
+        PaymentRecord record = new PaymentRecord();
+        record.setId(IdUtil.fastSimpleUUID());
+        record.setOrderId(orderId);
+        record.setUserId(order.getUserId());
+        record.setPaymentMethod("MOCK");
+        record.setAmount(order.getAmount());
+        record.setTransactionId(transactionId);
+        record.setStatus("SUCCESS");
+        record.setCallbackData("{\"type\":\"mock_payment\",\"test\":true}");
+        paymentRecordRepository.insert(record);
+        
+        // 激活会员
+        activateMembership(order.getUserId(), order.getPlanType());
+        
+        log.info("【测试】模拟支付处理完成: orderId={}, transactionId={}", orderId, transactionId);
+        
+        return convertToResponse(order);
+    }
+    
+    @Override
+    @Transactional
     public void cancelExpiredOrders() {
         log.info("开始取消超时订单...");
         

@@ -11,6 +11,7 @@ xinji-backend/com.xinji/
 ├── mapper/           # MySQL repositories (MyBatis-Plus BaseMapper)
 ├── repository/mongo/ # MongoDB repositories (Spring Data)
 ├── entity/           # MySQL entities (@TableName("t_*"))
+├── entity/mongo/     # MongoDB documents (@Document)
 ├── service/impl/     # Business logic
 └── security/         # JWT auth, SecurityContext
 ```
@@ -19,7 +20,7 @@ xinji-backend/com.xinji/
 
 ### Database Layer Separation
 - **MySQL entities**: Use `@TableName("t_user")` prefix, `@TableId(type = IdType.INPUT)` for UUID PKs
-- **MongoDB documents**: Plain POJOs with `@Document` annotation
+- **MongoDB documents**: POJOs with `@Document` in `entity/mongo/` package
 - **NEVER mix**: MyBatis mappers scan `com.xinji.mapper`, MongoDB repos in `com.xinji.repository.mongo`
 
 ```java
@@ -51,10 +52,20 @@ String encrypted = aesUtil.encrypt(plainText);
 String decrypted = aesUtil.decrypt(cipherText);
 ```
 
+### Null Safety in MongoDB Documents
+MongoDB documents may have null fields. Always check before using:
+```java
+// ❌ Bad - NullPointerException risk
+totalIntensity += ar.getEmotionIntensity();
+
+// ✅ Good - null check with default
+double intensity = ar.getEmotionIntensity() != null ? ar.getEmotionIntensity() : 0.5;
+```
+
 ## Frontend Patterns
 
 ### API Layer
-- Base URL: `/api` (proxied to backend)
+- Base URL: `/api` (proxied to backend at :12380)
 - All requests use `src/api/request.ts` axios instance with JWT interceptor
 - Types in `src/types/index.ts` must match backend DTOs
 
@@ -72,12 +83,21 @@ const userStore = useUserStore()
 await userStore.fetchUserProfile()  // NOT fetchUserInfo()
 ```
 
+### Week Calculation (ISO Week)
+Use `isoWeek` plugin for Monday-Sunday weeks:
+```typescript
+import isoWeek from 'dayjs/plugin/isoWeek'
+dayjs.extend(isoWeek)
+dayjs().startOf('isoWeek')  // Monday, NOT startOf('week') which is Sunday
+```
+
 ## Common Pitfalls
 
-1. **Order entity**: PK field is `orderId` (maps to `order_id`), not `id`
+1. **Order entity**: PK is `id` (maps to `id` column), with separate `orderNo` for business order number
 2. **MySQL table prefix**: All tables use `t_` prefix (t_user, t_diary, t_order)
 3. **MongoDB collections**: No prefix (diary_contents, analysis_results)
 4. **NOT NULL fields**: Always set `orderNo` when creating orders
+5. **Soft delete**: MySQL entities need `@TableLogic private Integer deleted;`
 
 ## Development Commands
 

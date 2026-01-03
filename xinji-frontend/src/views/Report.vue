@@ -104,16 +104,19 @@ import { getWeeklyReport } from '@/api/report'
 import { EmotionMap, EmotionColorMap, type WeeklyReport } from '@/types'
 import dayjs from 'dayjs'
 import weekOfYear from 'dayjs/plugin/weekOfYear'
+import isoWeek from 'dayjs/plugin/isoWeek'
 import * as echarts from 'echarts'
 
 dayjs.extend(weekOfYear)
+dayjs.extend(isoWeek)
 
 const router = useRouter()
 const userStore = useUserStore()
 
 const loading = ref(false)
 const report = ref<WeeklyReport | null>(null)
-const currentWeekStart = ref(dayjs().startOf('week'))
+// 使用 ISO 周：周一为一周的开始
+const currentWeekStart = ref(dayjs().startOf('isoWeek'))
 
 const trendChartRef = ref<HTMLElement>()
 const pieChartRef = ref<HTMLElement>()
@@ -129,7 +132,7 @@ const weekLabel = computed(() => {
 
 // 是否是当前周
 const isCurrentWeek = computed(() => {
-  return currentWeekStart.value.isSame(dayjs().startOf('week'), 'day')
+  return currentWeekStart.value.isSame(dayjs().startOf('isoWeek'), 'day')
 })
 
 // 上一周

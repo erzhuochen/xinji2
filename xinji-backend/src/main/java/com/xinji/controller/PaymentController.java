@@ -64,4 +64,14 @@ public class PaymentController {
         OrderResponse response = orderService.queryPaymentStatus(userId, orderId);
         return ApiResponse.success(response);
     }
+    
+    /**
+     * 模拟支付成功(测试用，正式环境需删除)
+     */
+    @PostMapping("/mock/pay/{orderId}")
+    public ApiResponse<OrderResponse> mockPaySuccess(@PathVariable String orderId) {
+        String userId = securityContext.getCurrentUserId();
+        OrderResponse response = orderService.mockPaySuccess(userId, orderId);
+        return ApiResponse.success("支付成功", response);
+    }
 }
