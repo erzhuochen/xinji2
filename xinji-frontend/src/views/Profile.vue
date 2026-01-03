@@ -6,14 +6,6 @@
         <el-avatar :size="72" :src="userStore.userInfo?.avatar">
           {{ userStore.userInfo?.nickname?.charAt(0) || '用' }}
         </el-avatar>
-        <el-upload
-          class="avatar-uploader"
-          action=""
-          :show-file-list="false"
-          :before-upload="handleAvatarUpload"
-        >
-          <el-button type="primary" link size="small">更换头像</el-button>
-        </el-upload>
       </div>
 
       <div class="info-section">
