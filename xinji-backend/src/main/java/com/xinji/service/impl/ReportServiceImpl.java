@@ -11,11 +11,15 @@ import com.xinji.mapper.DiaryRepository;
 import com.xinji.mapper.UserRepository;
 import com.xinji.repository.mongo.AnalysisResultRepository;
 import com.xinji.repository.mongo.WeeklyReportRepository;
+import com.xinji.service.AnalysisService;
 import com.xinji.service.ReportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -39,6 +43,15 @@ public class ReportServiceImpl implements ReportService {
     private final WeeklyReportRepository weeklyReportRepository;
     private final UserRepository userRepository;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final AnalysisService analysisService;
+    
+    @Value("${aliyun.dashscope.api-key}")
+    private String apiKey;
+    
+    @Value("${aliyun.dashscope.model:qwen-plus}")
+    private String model;
+    
+    private static final String DASHSCOPE_API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
     
     private static final String WEEKLY_REPORT_CACHE_PREFIX = "report:weekly:";
     
@@ -305,74 +318,342 @@ public class ReportServiceImpl implements ReportService {
         response.setStartDate(startDate.format(DateTimeFormatter.ISO_DATE));
         response.setEndDate(endDate.format(DateTimeFormatter.ISO_DATE));
         
-        List<InsightsReportResponse.Insight> insights = new ArrayList<>();
+        if (analysisResults.isEmpty()) {
+            response.setInsights(Collections.emptyList());
+            response.setGrowthPlan(Arrays.asList("开始记录日记，了解自己的情绪状态"));
+            return response;
+        }
         
-        // 情绪模式分析
-        if (!analysisResults.isEmpty()) {
-            Map<String, Long> emotionCounts = analysisResults.stream()
-                    .filter(ar -> ar.getPrimaryEmotion() != null)
-                    .collect(Collectors.groupingBy(AnalysisResult::getPrimaryEmotion, Collectors.counting()));
+        // 调用 AI 生成深度洞察
+        String aiInsights = generateAiInsights(startDate, endDate, analysisResults);
+        
+        // 解析 AI 返回的洞察内容
+        List<InsightsReportResponse.Insight> insights = parseAiInsights(aiInsights, analysisResults);
+        response.setInsights(insights);
+        
+        // 生成成长计划（也通过 AI）
+        List<String> growthPlan = generateGrowthPlan(analysisResults, aiInsights);
+        response.setGrowthPlan(growthPlan);
+        
+        // 情绪预测
+        InsightsReportResponse.EmotionForecast forecast = generateEmotionForecast(analysisResults);
+        response.setEmotionForecast(forecast);
+        
+        // 正念练习推荐
+        List<InsightsReportResponse.MindfulnessSuggestion> mindfulness = generateMindfulnessSuggestions(analysisResults);
+        response.setMindfulnessSuggestions(mindfulness);
+        
+        return response;
+    }
+    
+    /**
+     * 调用 AI 生成深度洞察
+     */
+    private String generateAiInsights(LocalDate startDate, LocalDate endDate, List<AnalysisResult> analysisResults) {
+        // 统计情绪数据
+        Map<String, Long> emotionCounts = analysisResults.stream()
+                .filter(ar -> ar.getPrimaryEmotion() != null)
+                .collect(Collectors.groupingBy(AnalysisResult::getPrimaryEmotion, Collectors.counting()));
+        
+        // 统计认知偏差
+        Map<String, Long> distortionCounts = analysisResults.stream()
+                .flatMap(ar -> ar.getCognitiveDistortions() != null ? ar.getCognitiveDistortions().stream() : java.util.stream.Stream.empty())
+                .filter(cd -> cd.getType() != null && !"NONE".equals(cd.getType()))
+                .collect(Collectors.groupingBy(AnalysisResult.CognitiveDistortion::getType, Collectors.counting()));
+        
+        // 提取关键情绪事件
+        List<String> emotionalEvents = analysisResults.stream()
+                .filter(ar -> ar.getEmotionIntensity() != null && ar.getEmotionIntensity() > 0.7)
+                .limit(5)
+                .map(ar -> translateEmotion(ar.getPrimaryEmotion()) + "(强度:" + String.format("%.1f", ar.getEmotionIntensity()) + ")")
+                .collect(Collectors.toList());
+        
+        // 构建 AI prompt
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("你是一位专业的心理咨询师。请基于以下用户的情绪数据，提供深度心理洞察和专业建议。\n\n");
+        prompt.append("【时间范围】").append(startDate).append(" 至 ").append(endDate).append("\n");
+        prompt.append("【日记数量】").append(analysisResults.size()).append(" 篇\n\n");
+        
+        prompt.append("【情绪分布】\n");
+        emotionCounts.forEach((emotion, count) -> 
+            prompt.append("- ").append(translateEmotion(emotion)).append(": ").append(count).append("次\n")
+        );
+        
+        if (!emotionalEvents.isEmpty()) {
+            prompt.append("\n【高强度情绪事件】\n");
+            emotionalEvents.forEach(event -> prompt.append("- ").append(event).append("\n"));
+        }
+        
+        if (!distortionCounts.isEmpty()) {
+            prompt.append("\n【检测到的认知偏差】\n");
+            distortionCounts.forEach((type, count) -> 
+                prompt.append("- ").append(translateDistortion(type)).append(": ").append(count).append("次\n")
+            );
+        }
+        
+        prompt.append("\n请提供以下内容（用 JSON 格式返回）：\n");
+        prompt.append("1. insights: 3-5条深度心理洞察（每条包含 type、title、content、confidence）\n");
+        prompt.append("   - type 可以是: EMOTION_PATTERN（情绪模式）、COGNITIVE_PATTERN（认知模式）、BEHAVIOR_PATTERN（行为模式）、GROWTH_OPPORTUNITY（成长机会）\n");
+        prompt.append("   - title: 洞察标题（简短）\n");
+        prompt.append("   - content: 详细分析和建议（100-200字）\n");
+        prompt.append("   - confidence: 置信度（0-1之间）\n");
+        prompt.append("2. growthPlan: 3-5条具体可行的成长建议\n");
+        prompt.append("3. emotionForecast: 情绪风险预测（包含 nextWeekRisk 和 triggers）\n");
+        prompt.append("   - nextWeekRisk: LOW/MEDIUM/HIGH\n");
+        prompt.append("   - triggers: 可能的触发因素数组\n\n");
+        prompt.append("要求：\n");
+        prompt.append("- 洞察要专业、深入，不要泛泛而谈\n");
+        prompt.append("- 建议要具体、可操作，避免空洞的鸡汤\n");
+        prompt.append("- 语气温和、支持性，避免说教\n");
+        prompt.append("- 返回格式必须是有效的 JSON\n");
+        
+        try {
+            return callAiApi(prompt.toString());
+        } catch (Exception e) {
+            log.error("AI 生成洞察失败", e);
+            return generateFallbackInsights(emotionCounts, distortionCounts);
+        }
+    }
+    
+    /**
+     * 调用阿里云通义千问 API
+     */
+    private String callAiApi(String prompt) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
             
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Authorization", "Bearer " + apiKey);
+            
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("model", model);
+            requestBody.put("messages", Arrays.asList(
+                    Map.of("role", "system", "content", "你是一个专业的心理咨询师，擅长情绪分析和认知行为疗法。请用JSON格式返回分析结果。"),
+                    Map.of("role", "user", "content", prompt)
+            ));
+            requestBody.put("response_format", Map.of("type", "json_object"));
+            
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+            
+            ResponseEntity<String> response = restTemplate.exchange(
+                    DASHSCOPE_API_URL,
+                    HttpMethod.POST,
+                    entity,
+                    String.class
+            );
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                com.alibaba.fastjson2.JSONObject jsonResponse = com.alibaba.fastjson2.JSON.parseObject(response.getBody());
+                String resultContent = jsonResponse
+                        .getJSONArray("choices")
+                        .getJSONObject(0)
+                        .getJSONObject("message")
+                        .getString("content");
+                return resultContent;
+            }
+            
+            throw new RuntimeException("AI API 调用失败");
+        } catch (Exception e) {
+            log.error("调用 AI API 失败", e);
+            throw new RuntimeException("AI API 调用失败", e);
+        }
+    }
+    
+    /**
+     * 解析 AI 返回的洞察内容
+     */
+    private List<InsightsReportResponse.Insight> parseAiInsights(String aiResponse, List<AnalysisResult> analysisResults) {
+        try {
+            // 尝试解析 JSON
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(aiResponse);
+            
+            List<InsightsReportResponse.Insight> insights = new ArrayList<>();
+            com.fasterxml.jackson.databind.JsonNode insightsNode = root.get("insights");
+            
+            if (insightsNode != null && insightsNode.isArray()) {
+                for (com.fasterxml.jackson.databind.JsonNode node : insightsNode) {
+                    InsightsReportResponse.Insight insight = new InsightsReportResponse.Insight();
+                    insight.setType(node.get("type").asText());
+                    insight.setTitle(node.get("title").asText());
+                    insight.setContent(node.get("content").asText());
+                    insight.setConfidence(node.get("confidence").asDouble());
+                    insights.add(insight);
+                }
+            }
+            
+            return insights.isEmpty() ? generateFallbackInsightsList(analysisResults) : insights;
+        } catch (Exception e) {
+            log.error("解析 AI 洞察失败", e);
+            return generateFallbackInsightsList(analysisResults);
+        }
+    }
+    
+    /**
+     * 生成成长计划
+     */
+    private List<String> generateGrowthPlan(List<AnalysisResult> analysisResults, String aiResponse) {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(aiResponse);
+            com.fasterxml.jackson.databind.JsonNode planNode = root.get("growthPlan");
+            
+            if (planNode != null && planNode.isArray()) {
+                List<String> plan = new ArrayList<>();
+                planNode.forEach(node -> plan.add(node.asText()));
+                return plan;
+            }
+        } catch (Exception e) {
+            log.error("解析成长计划失败", e);
+        }
+        
+        return Arrays.asList(
+                "建议每天进行10分钟正念冥想练习",
+                "尝试记录每天的3件积极事件",
+                "关注情绪触发因素，提升自我觉察能力"
+        );
+    }
+    
+    /**
+     * 生成情绪预测
+     */
+    private InsightsReportResponse.EmotionForecast generateEmotionForecast(List<AnalysisResult> analysisResults) {
+        InsightsReportResponse.EmotionForecast forecast = new InsightsReportResponse.EmotionForecast();
+        
+        // 计算负面情绪比例
+        long negativeCount = analysisResults.stream()
+                .filter(ar -> {
+                    String emotion = ar.getPrimaryEmotion();
+                    return emotion != null && (emotion.equals("ANXIETY") || emotion.equals("SADNESS") || 
+                           emotion.equals("ANGER") || emotion.equals("FEAR"));
+                })
+                .count();
+        
+        double negativeRatio = analysisResults.isEmpty() ? 0 : (double) negativeCount / analysisResults.size();
+        
+        if (negativeRatio > 0.6) {
+            forecast.setNextWeekRisk("HIGH");
+        } else if (negativeRatio > 0.3) {
+            forecast.setNextWeekRisk("MEDIUM");
+        } else {
+            forecast.setNextWeekRisk("LOW");
+        }
+        
+        // 提取常见触发因素
+        List<String> triggers = analysisResults.stream()
+                .flatMap(ar -> ar.getKeywords() != null ? ar.getKeywords().stream() : java.util.stream.Stream.empty())
+                .filter(k -> k != null)
+                .collect(Collectors.groupingBy(k -> k, Collectors.counting()))
+                .entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(3)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+        
+        forecast.setTriggers(triggers.isEmpty() ? Arrays.asList("工作压力", "人际关系") : triggers);
+        
+        return forecast;
+    }
+    
+    /**
+     * 生成正念练习推荐
+     */
+    private List<InsightsReportResponse.MindfulnessSuggestion> generateMindfulnessSuggestions(List<AnalysisResult> analysisResults) {
+        List<InsightsReportResponse.MindfulnessSuggestion> suggestions = new ArrayList<>();
+        
+        // 基于主要情绪推荐练习
+        Map<String, Long> emotionCounts = analysisResults.stream()
+                .filter(ar -> ar.getPrimaryEmotion() != null)
+                .collect(Collectors.groupingBy(AnalysisResult::getPrimaryEmotion, Collectors.counting()));
+        
+        String dominantEmotion = emotionCounts.entrySet().stream()
+                .max(Map.Entry.comparingByValue())
+                .map(Map.Entry::getKey)
+                .orElse("NEUTRAL");
+        
+        InsightsReportResponse.MindfulnessSuggestion breathing = new InsightsReportResponse.MindfulnessSuggestion();
+        breathing.setTitle("呼吸冥想");
+        breathing.setDuration("10分钟");
+        breathing.setUrl("/mental-training/breathing");
+        suggestions.add(breathing);
+        
+        if ("ANXIETY".equals(dominantEmotion) || "FEAR".equals(dominantEmotion)) {
+            InsightsReportResponse.MindfulnessSuggestion cognitive = new InsightsReportResponse.MindfulnessSuggestion();
+            cognitive.setTitle("认知重构练习");
+            cognitive.setDuration("15分钟");
+            cognitive.setUrl("/mental-training/cognitive-reframe");
+            suggestions.add(cognitive);
+        } else if ("SADNESS".equals(dominantEmotion)) {
+            InsightsReportResponse.MindfulnessSuggestion gratitude = new InsightsReportResponse.MindfulnessSuggestion();
+            gratitude.setTitle("感恩练习");
+            gratitude.setDuration("10分钟");
+            gratitude.setUrl("/mental-training/gratitude");
+            suggestions.add(gratitude);
+        }
+        
+        return suggestions;
+    }
+    
+    /**
+     * 生成备用洞察（AI 失败时）
+     */
+    private String generateFallbackInsights(Map<String, Long> emotionCounts, Map<String, Long> distortionCounts) {
+        StringBuilder json = new StringBuilder();
+        json.append("{\"insights\":[");
+        
+        if (!emotionCounts.isEmpty()) {
             String dominantEmotion = emotionCounts.entrySet().stream()
                     .max(Map.Entry.comparingByValue())
                     .map(Map.Entry::getKey)
                     .orElse("NEUTRAL");
             
-            InsightsReportResponse.Insight emotionInsight = new InsightsReportResponse.Insight();
-            emotionInsight.setType("EMOTION_PATTERN");
-            emotionInsight.setTitle("情绪波动规律");
-            emotionInsight.setContent("您在这段时间内主要情绪为" + translateEmotion(dominantEmotion) + 
-                    "，出现了" + emotionCounts.getOrDefault(dominantEmotion, 0L) + "次");
-            emotionInsight.setConfidence(0.85);
-            insights.add(emotionInsight);
-            
-            // 认知模式分析
-            Map<String, Long> distortionCounts = analysisResults.stream()
-                    .flatMap(ar -> ar.getCognitiveDistortions() != null ? ar.getCognitiveDistortions().stream() : java.util.stream.Stream.empty())
-                    .filter(cd -> cd.getType() != null && !"NONE".equals(cd.getType()))
-                    .collect(Collectors.groupingBy(AnalysisResult.CognitiveDistortion::getType, Collectors.counting()));
-            
-            if (!distortionCounts.isEmpty()) {
-                String mainDistortion = distortionCounts.entrySet().stream()
-                        .max(Map.Entry.comparingByValue())
-                        .map(Map.Entry::getKey)
-                        .orElse("");
-                
-                InsightsReportResponse.Insight cognitiveInsight = new InsightsReportResponse.Insight();
-                cognitiveInsight.setType("COGNITIVE_PATTERN");
-                cognitiveInsight.setTitle("认知偏差倾向");
-                cognitiveInsight.setContent("检测到您有轻微的'" + translateDistortion(mainDistortion) + "'认知偏差倾向，建议关注");
-                cognitiveInsight.setConfidence(0.72);
-                insights.add(cognitiveInsight);
-            }
+            json.append("{\"type\":\"EMOTION_PATTERN\",");
+            json.append("\"title\":\"主要情绪模式\",");
+            json.append("\"content\":\"您在这段时间内主要情绪为").append(translateEmotion(dominantEmotion));
+            json.append("，建议关注情绪变化的规律和触发因素。\",");
+            json.append("\"confidence\":0.75}");
         }
         
-        response.setInsights(insights);
+        json.append("],\"growthPlan\":[");
+        json.append("\"每天花10分钟进行情绪觉察练习\",");
+        json.append("\"记录情绪触发事件，提升自我认知\",");
+        json.append("\"保持规律作息，注意身心健康\"");
+        json.append("],\"emotionForecast\":{");
+        json.append("\"nextWeekRisk\":\"MEDIUM\",");
+        json.append("\"triggers\":[\"工作压力\",\"人际关系\"]");
+        json.append("}}");
         
-        // 成长计划
-        List<String> growthPlan = Arrays.asList(
-                "建议每天进行10分钟正念冥想",
-                "尝试记录3件积极事件",
-                "注意压力管理，适时放松"
-        );
-        response.setGrowthPlan(growthPlan);
+        return json.toString();
+    }
+    
+    /**
+     * 生成备用洞察列表
+     */
+    private List<InsightsReportResponse.Insight> generateFallbackInsightsList(List<AnalysisResult> analysisResults) {
+        List<InsightsReportResponse.Insight> insights = new ArrayList<>();
         
-        // 情绪预测
-        InsightsReportResponse.EmotionForecast forecast = new InsightsReportResponse.EmotionForecast();
-        forecast.setNextWeekRisk("LOW");
-        forecast.setTriggers(Arrays.asList("工作压力", "人际关系"));
-        response.setEmotionForecast(forecast);
+        Map<String, Long> emotionCounts = analysisResults.stream()
+                .filter(ar -> ar.getPrimaryEmotion() != null)
+                .collect(Collectors.groupingBy(AnalysisResult::getPrimaryEmotion, Collectors.counting()));
         
-        // 正念练习推荐
-        List<InsightsReportResponse.MindfulnessSuggestion> mindfulness = new ArrayList<>();
-        InsightsReportResponse.MindfulnessSuggestion breathing = new InsightsReportResponse.MindfulnessSuggestion();
-        breathing.setTitle("呼吸冥想");
-        breathing.setDuration("10分钟");
-        breathing.setUrl("/mindfulness/breathing");
-        mindfulness.add(breathing);
-        response.setMindfulnessSuggestions(mindfulness);
+        if (!emotionCounts.isEmpty()) {
+            String dominantEmotion = emotionCounts.entrySet().stream()
+                    .max(Map.Entry.comparingByValue())
+                    .map(Map.Entry::getKey)
+                    .orElse("NEUTRAL");
+            
+            InsightsReportResponse.Insight insight = new InsightsReportResponse.Insight();
+            insight.setType("EMOTION_PATTERN");
+            insight.setTitle("情绪模式观察");
+            insight.setContent("您在这段时间内主要情绪为" + translateEmotion(dominantEmotion) + 
+                    "，出现了" + emotionCounts.getOrDefault(dominantEmotion, 0L) + "次。" +
+                    "建议关注这种情绪出现的规律和触发因素，提升自我觉察能力。");
+            insight.setConfidence(0.75);
+            insights.add(insight);
+        }
         
-        return response;
+        return insights;
     }
     
     /**
