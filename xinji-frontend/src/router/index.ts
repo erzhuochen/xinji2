@@ -66,6 +66,32 @@ const routes: RouteRecordRaw[] = [
         name: 'Settings',
         component: () => import('@/views/Settings.vue'),
         meta: { title: '设置' }
+      },
+      {
+        path: 'mental-training',
+        name: 'MentalTraining',
+        component: () => import('@/views/MentalTrainingView.vue'),
+        meta: { title: '心理训练', keepAlive: true }
+      },
+      {
+        path: 'mental-training/emotion-naming',
+        component: () => import('@/components/mental-training/EmotionNaming.vue')
+      },
+      {
+        path: 'mental-training/gratitude',
+        component: () => import('@/components/mental-training/GratitudeExercise.vue')
+      },
+      {
+        path: 'mental-training/breathing',
+        component: () => import('@/components/mental-training/BreathingGuide.vue')
+      },
+      {
+        path: 'mental-training/cognitive-reframe',
+        component: () => import('@/components/mental-training/CognitiveReframe.vue')
+      },
+      {
+        path: 'mental-training/small-goal',
+        component: () => import('@/components/mental-training/SmallGoalSetting.vue')
       }
     ]
   },
