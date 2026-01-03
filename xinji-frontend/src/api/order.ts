@@ -41,6 +41,13 @@ export const wechatPrepay = (orderId: string) => {
 }
 
 /**
+ * 模拟支付 (开发环境)
+ */
+export const mockPay = (orderId: string) => {
+  return request.post<ApiResponse<Order>>('/payment/mock/pay', { orderId }).then(res => res.data)
+}
+
+/**
  * 查询支付状态
  */
 export const queryPaymentStatus = (orderId: string) => {

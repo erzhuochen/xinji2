@@ -35,6 +35,11 @@
         </div>
       </div>
 
+      <!-- 年度日记贡献图 -->
+      <div class="contribution-section">
+        <DiaryContributionGraph />
+      </div>
+
       <!-- 情绪趋势图 -->
       <div class="chart-section" v-if="report.emotionTrend.length > 0">
         <h2 class="section-title">情绪趋势</h2>
@@ -50,22 +55,28 @@
       <!-- 关键词云 -->
       <div class="keywords-section" v-if="report.keywords.length > 0">
         <h2 class="section-title">本周关键词</h2>
-        <div class="keyword-cloud">
-          <span 
-            v-for="(kw, i) in report.keywords" 
-            :key="kw"
-            class="keyword"
-            :style="{ fontSize: getKeywordSize(i) + 'px' }"
-          >
-            {{ kw }}
-          </span>
-        </div>
+        <div ref="wordCloudRef" class="chart-container word-cloud"></div>
       </div>
 
       <!-- 周总结 -->
       <div class="summary-section" v-if="report.summary">
         <h2 class="section-title">AI周总结</h2>
-        <div class="summary-content">{{ report.summary }}</div>
+
+        <div class="summary-content">{{ report.summary.summary }}</div>
+
+        <div class="summary-sub" v-if="report.summary.suggestions?.length">
+          <h3 class="sub-title">个性化建议</h3>
+          <ul class="list">
+            <li v-for="(s, i) in report.summary.suggestions" :key="i">{{ s }}</li>
+          </ul>
+        </div>
+
+        <div class="summary-sub" v-if="report.summary.actionPoints?.length">
+          <h3 class="sub-title">本周行动点</h3>
+          <ul class="list">
+            <li v-for="(a, i) in report.summary.actionPoints" :key="i">{{ a }}</li>
+          </ul>
+        </div>
       </div>
 
       <!-- 深度洞察入口 -->
@@ -96,15 +107,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight, TrendCharts, DataAnalysis } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { getWeeklyReport } from '@/api/report'
 import { EmotionMap, EmotionColorMap, type WeeklyReport } from '@/types'
+import DiaryContributionGraph from '@/components/DiaryContributionGraph.vue'
 import dayjs from 'dayjs'
 import weekOfYear from 'dayjs/plugin/weekOfYear'
 import * as echarts from 'echarts'
+// @ts-ignore
+import 'echarts-wordcloud'
 
 dayjs.extend(weekOfYear)
 
@@ -113,12 +127,20 @@ const userStore = useUserStore()
 
 const loading = ref(false)
 const report = ref<WeeklyReport | null>(null)
-const currentWeekStart = ref(dayjs().startOf('week'))
+// 以周一为一周开始
+const getMonday = (d: dayjs.Dayjs) => {
+  // day(): 0 周日,1 周一...
+  const day = d.day()
+  return day === 1 ? d.startOf('day') : d.startOf('week').add(1, 'day')
+}
+const currentWeekStart = ref(getMonday(dayjs()))
 
 const trendChartRef = ref<HTMLElement>()
 const pieChartRef = ref<HTMLElement>()
+const wordCloudRef = ref<HTMLElement>()
 let trendChart: echarts.ECharts | null = null
 let pieChart: echarts.ECharts | null = null
+let cloudChart: echarts.ECharts | null = null
 
 // 周标签
 const weekLabel = computed(() => {
@@ -167,6 +189,7 @@ const fetchReport = async () => {
 const initCharts = () => {
   initTrendChart()
   initPieChart()
+  initWordCloud()
 }
 
 // 初始化趋势图
@@ -178,7 +201,11 @@ const initTrendChart = () => {
 
   const data = report.value.emotionTrend
   const xData = data.map(d => dayjs(d.date).format('M/D'))
-  const yData = data.map(d => d.intensity)
+  const negativeEmotions = new Set(['SAD', 'ANGRY', 'FEAR', 'DISGUST', 'ANXIOUS'])
+  const yData = data.map(d => {
+    const intensity = d.intensity
+    return negativeEmotions.has(d.emotion) ? -intensity : intensity
+  })
   const emotions = data.map(d => d.emotion)
 
   trendChart.setOption({
@@ -186,7 +213,9 @@ const initTrendChart = () => {
       trigger: 'axis',
       formatter: (params: any) => {
         const i = params[0].dataIndex
-        return `${xData[i]}<br/>${getEmotionLabel(emotions[i])}: ${Math.round(yData[i] * 100)}%`
+        const emotionLabel = getEmotionLabel(emotions[i])
+        const absoluteIntensity = Math.round(Math.abs(yData[i]) * 100)
+        return `${xData[i]}<br/>${emotionLabel}: ${absoluteIntensity}%`
       }
     },
     grid: {
@@ -203,14 +232,14 @@ const initTrendChart = () => {
     },
     yAxis: {
       type: 'value',
-      min: 0,
+      min: -1,
       max: 1,
       axisLine: { show: false },
       axisTick: { show: false },
       splitLine: { lineStyle: { color: '#f0f0f0' } },
       axisLabel: {
         color: '#999',
-        formatter: (v: number) => Math.round(v * 100) + '%'
+        formatter: (v: number) => Math.round(Math.abs(v) * 100) + '%'
       }
     },
     series: [{
@@ -222,11 +251,66 @@ const initTrendChart = () => {
         color: (params: any) => getEmotionColor(emotions[params.dataIndex])
       },
       areaStyle: {
+        origin: 'auto',
         color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
           { offset: 0, color: 'rgba(156, 39, 176, 0.3)' },
           { offset: 1, color: 'rgba(156, 39, 176, 0)' }
         ])
       }
+    }]
+  })
+}
+
+// 初始化词云
+const MAX_WORDS = 20
+// 初始化词云
+const initWordCloud = () => {
+  if (!wordCloudRef.value || !report.value?.keywords?.length) return
+
+  if (cloudChart) cloudChart.dispose()
+  cloudChart = echarts.init(wordCloudRef.value)
+
+  // 取前 MAX_WORDS 个关键词，不足则重复放大已有关键词
+  let words: string[] = []
+  if (report.value.keywords.length >= MAX_WORDS) {
+    words = report.value.keywords.slice(0, MAX_WORDS)
+  } else {
+    // copy and repeat until reach 20
+    const times = Math.ceil(MAX_WORDS / report.value.keywords.length)
+    for (let t = 0; t < times; t++) {
+      words.push(...report.value.keywords)
+    }
+    words = words.slice(0, MAX_WORDS)
+  }
+
+  // 将关键词转换为词云需要的数据格式，按出现次数赋值，出现多次权重大
+  const freqMap: Record<string, number> = {}
+  words.forEach(w => {
+    freqMap[w] = (freqMap[w] || 0) + 1
+  })
+
+  const data = Object.entries(freqMap).map(([name, value]) => ({ name, value }))
+
+  // 词云配置，需引入 echarts-wordcloud 插件
+  cloudChart.setOption({
+    tooltip: {
+      show: true
+    },
+    series: [{
+      type: 'wordCloud',
+      shape: 'circle',
+      left: 'center',
+      top: 'center',
+      width: '100%',
+      height: '100%',
+      rotationRange: [0, 0],
+      gridSize: 4,
+      textStyle: {
+        color: () => '#'+Math.floor(Math.random()*16777215).toString(16)
+      },
+      data,
+      // sizeRange 会基于 value 做映射
+      sizeRange: [12, 40]
     }]
   })
 }
@@ -294,6 +378,7 @@ const goMembership = () => {
 const handleResize = () => {
   trendChart?.resize()
   pieChart?.resize()
+  cloudChart?.resize()
 }
 
 onMounted(() => {
@@ -330,11 +415,12 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-around;
-  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+  background: #fff;
+  border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 24px 16px;
   margin-bottom: 20px;
-  color: #fff;
+  color: var(--text-primary);
 
   .stat-item {
     display: flex;
@@ -356,8 +442,15 @@ onMounted(() => {
       padding: 4px 12px;
       border-radius: 12px;
       font-size: 13px;
+      color: #333;
+      background: #fff;
     }
   }
+}
+
+// 贡献图区域
+.contribution-section {
+  margin-bottom: 20px;
 }
 
 // 图表区域
@@ -398,7 +491,11 @@ onMounted(() => {
     margin: 0 0 16px;
   }
 
-  .keyword-cloud {
+  .word-cloud {
+      height: 240px;
+    }
+
+    .keyword-cloud {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
@@ -429,6 +526,28 @@ onMounted(() => {
     font-size: 14px;
     line-height: 1.8;
     color: var(--text-secondary);
+  }
+
+  .summary-sub {
+    margin-top: 14px;
+  }
+
+  .sub-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 8px;
+  }
+
+  .list {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--text-secondary);
+    line-height: 1.8;
+
+    li {
+      margin: 6px 0;
+    }
   }
 }
 

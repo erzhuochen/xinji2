@@ -21,10 +21,10 @@ import java.util.Map;
 @RequestMapping("/payment")
 @RequiredArgsConstructor
 public class PaymentController {
-    
+
     private final OrderService orderService;
     private final SecurityContext securityContext;
-    
+
     /**
      * 微信支付预下单
      */
@@ -34,7 +34,17 @@ public class PaymentController {
         WechatPrepayResponse response = orderService.wechatPrepay(userId, request.getOrderId());
         return ApiResponse.success(response);
     }
-    
+
+    /**
+     * 模拟支付接口（前端测试用）
+     */
+    @PostMapping("/mock/pay")
+    public ApiResponse<OrderResponse> mockPay(@Valid @RequestBody PaymentRequest request) {
+        String userId = securityContext.getCurrentUserId();
+        OrderResponse resp = orderService.mockPay(userId, request.getOrderId());
+        return ApiResponse.success("支付成功", resp);
+    }
+
     /**
      * 微信支付回调
      */
@@ -45,7 +55,7 @@ public class PaymentController {
             @RequestHeader(value = "Wechatpay-Timestamp", required = false) String timestamp,
             @RequestHeader(value = "Wechatpay-Nonce", required = false) String nonce,
             @RequestHeader(value = "Wechatpay-Serial", required = false) String serial) {
-        
+
         try {
             orderService.handleWechatNotify(requestBody, signature, timestamp, nonce, serial);
             return Map.of("code", "SUCCESS", "message", "成功");
@@ -54,7 +64,7 @@ public class PaymentController {
             return Map.of("code", "FAIL", "message", "处理失败");
         }
     }
-    
+
     /**
      * 查询支付状态
      */

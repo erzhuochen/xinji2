@@ -111,9 +111,43 @@
       <template #footer>
         <el-button @click="showRenewDialog = false">取消</el-button>
         <el-button type="primary" :loading="purchasing" @click="handleRenew">
-          确认续费
+          去支付
         </el-button>
       </template>
+    </el-dialog>
+
+    <!-- 支付弹窗：模拟二维码 -->
+    <el-dialog
+      v-model="showPayDialog"
+      title="微信支付"
+      width="340px"
+      :close-on-click-modal="false"
+      @close="handlePayDialogClose"
+    >
+      <div class="pay-dialog">
+        
+
+        <div class="qr-card">
+          <div class="qr-title">请使用微信扫码</div>
+          <div class="qr-box" aria-label="mock-qrcode">
+            <div class="qr-grid"></div>
+          </div>
+          <div class="qr-order" v-if="currentOrderId">
+            订单号：{{ currentOrderId }}
+          </div>
+        </div>
+
+        <div class="pay-actions">
+          <el-button @click="handlePayDialogClose">稍后支付</el-button>
+          <el-button type="primary" :loading="purchasing" class="pay-btn" @click="handleMockPaySuccess">
+            我已支付
+          </el-button>
+        </div>
+
+        <div class="pay-note">
+          点击“我已支付”后，后端会将订单置为 PAID，并更新用户会员到期时间。
+        </div>
+      </div>
     </el-dialog>
   </div>
 </template>
@@ -123,7 +157,7 @@ import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Check } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
-import { createOrder, wechatPrepay } from '@/api/order'
+import { createOrder, mockPay } from '@/api/order'
 import dayjs from 'dayjs'
 
 const userStore = useUserStore()
@@ -132,6 +166,8 @@ const selectedPlan = ref('MONTHLY')
 const autoRenew = ref(false)
 const purchasing = ref(false)
 const showRenewDialog = ref(false)
+const showPayDialog = ref(false)
+const currentOrderId = ref<string | null>(null)
 
 // 功能对比
 const features = [
@@ -179,20 +215,18 @@ const formatDate = (date?: string) => {
   return dayjs(date).format('YYYY年MM月DD日')
 }
 
+// 打开支付弹窗（创建订单后展示二维码）
+const openPayDialogWithOrder = (orderId: string) => {
+  currentOrderId.value = orderId
+  showPayDialog.value = true
+}
+
 // 购买
 const handlePurchase = async () => {
   purchasing.value = true
   try {
-    // 创建订单
     const orderRes = await createOrder(selectedPlan.value, autoRenew.value)
-    const order = orderRes.data
-
-    // 调起支付
-    const payRes = await wechatPrepay(order.orderId)
-    
-    // TODO: 调用微信支付SDK
-    ElMessage.info('微信支付功能开发中，请稍后重试')
-    
+    openPayDialogWithOrder(orderRes.data.orderId)
   } catch (error) {
     console.error('购买失败:', error)
   } finally {
@@ -205,16 +239,39 @@ const handleRenew = async () => {
   purchasing.value = true
   try {
     const orderRes = await createOrder(selectedPlan.value, false)
-    const payRes = await wechatPrepay(orderRes.data.orderId)
-    
-    // TODO: 调用微信支付SDK
-    ElMessage.info('微信支付功能开发中，请稍后重试')
+    openPayDialogWithOrder(orderRes.data.orderId)
     showRenewDialog.value = false
   } catch (error) {
     console.error('续费失败:', error)
   } finally {
     purchasing.value = false
   }
+}
+
+// 模拟“已扫码支付成功”
+const handleMockPaySuccess = async () => {
+  if (!currentOrderId.value) return
+
+  purchasing.value = true
+  try {
+    await mockPay(currentOrderId.value)
+    ElMessage.success('支付成功，PRO已生效')
+
+    // 及时刷新用户信息（从数据库取最新 memberStatus / expireTime）
+    await userStore.fetchUserProfile()
+
+    showPayDialog.value = false
+    currentOrderId.value = null
+  } catch (error) {
+    console.error('模拟支付失败:', error)
+  } finally {
+    purchasing.value = false
+  }
+}
+
+const handlePayDialogClose = () => {
+  showPayDialog.value = false
+  currentOrderId.value = null
 }
 </script>
 
@@ -235,7 +292,7 @@ const handleRenew = async () => {
   margin-bottom: 20px;
 
   &.pro {
-    background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+    background: linear-gradient(135deg, #6f42c1, #4a148c);
     color: #fff;
 
     .status-badge {
@@ -342,8 +399,15 @@ const handleRenew = async () => {
     transition: all 0.2s;
 
     &.selected {
-      border-color: var(--primary-color);
+      border: 2px solid var(--primary-color);
       background: var(--primary-light);
+      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.04);
+
+      .plan-name,
+      .plan-price {
+        color: var(--primary-color);
+        font-weight: 700;
+      }
     }
 
     &.recommended {
@@ -413,24 +477,21 @@ const handleRenew = async () => {
 
 // 购买按钮
 .purchase-section {
-  position: fixed;
-  bottom: 60px;
-  left: 0;
-  right: 0;
-  background: #fff;
-  padding: 16px;
-  padding-bottom: calc(16px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--border-color);
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 16px 40px;
+
+
 
   .el-button {
-    width: 100%;
+
     max-width: 400px;
     height: 48px;
     font-size: 16px;
     border-radius: 12px;
-    background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-    border: none;
+
   }
 
   .hint {
@@ -448,6 +509,18 @@ const handleRenew = async () => {
 
 // 续费弹窗
 .renew-plans {
+  // 确保选中套餐样式醒目
+  .renew-plan-item.selected {
+    border: 2px solid var(--primary-color);
+    background: var(--primary-light);
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.06);
+
+    .plan-name,
+    .plan-price {
+      color: var(--primary-color);
+      font-weight: 700;
+    }
+  }
   .renew-plan-item {
     display: flex;
     justify-content: space-between;
@@ -469,11 +542,51 @@ const handleRenew = async () => {
   }
 }
 
-@media (min-width: 768px) {
-  .purchase-section {
-    max-width: 480px;
-    left: 50%;
-    transform: translateX(-50%);
+// 支付弹窗样式
+.pay-dialog {
+  text-align: center;
+  .pay-tip {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+  }
+  .qr-card {
+    background: #f8f8f8;
+    padding: 16px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    .qr-title {
+      font-size: 14px;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    .qr-box {
+      width: 160px;
+      height: 160px;
+      margin: 0 auto 12px;
+      background-image: repeating-linear-gradient(45deg, #000 0 4px, #fff 4px 8px);
+    }
+    .qr-order {
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+  }
+  .pay-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    .pay-btn {
+      background: #000;
+      color: #fff;
+      border: none;
+    }
+  }
+  .pay-note {
+    font-size: 11px;
+    color: var(--text-tertiary);
   }
 }
+
+
 </style>

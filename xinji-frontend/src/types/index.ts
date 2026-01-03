@@ -101,7 +101,11 @@ export interface WeeklyReport {
   averageIntensity?: number
   mostFrequentEmotion?: string
   keywords: string[]
-  summary?: string
+  summary?: {
+    summary: string
+    suggestions: string[]
+    actionPoints: string[]
+  }
 }
 
 export interface InsightsReport {

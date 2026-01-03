@@ -97,12 +97,18 @@
             <version>${hutool.version}</version>
         </dependency>
         
-        <!-- 阿里云百炼SDK -->
+        <!-- 阿里云百炼SDK (DashScope)
+             说明：dashscope-sdk-java 在 Maven Central 上可能无法解析，导致项目无法编译/运行。
+             如需使用，请在能访问其仓库的环境中配置 <repositories>，或替换为可用的 SDK 版本。
+             这里先注释掉以保证项目可正常构建与启动。
+        -->
+        <!--
         <dependency>
             <groupId>com.aliyun</groupId>
             <artifactId>dashscope-sdk-java</artifactId>
             <version>${aliyun-sdk.version}</version>
         </dependency>
+        -->
         
         <!-- 微信支付SDK -->
         <dependency>

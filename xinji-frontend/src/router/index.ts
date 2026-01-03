@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import NProgress from 'nprogress'
+import { ElMessage } from 'element-plus'
 import 'nprogress/nprogress.css'
 
 // 配置进度条
@@ -44,10 +45,28 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '情绪周报', keepAlive: true }
       },
       {
+        path: 'mental-training',
+        name: 'MentalTraining',
+        component: () => import('@/views/MentalTraining.vue'),
+        meta: { title: '心理训练', keepAlive: true }
+      },
+      {
+        path: 'mental-training/:id',
+        name: 'MentalTrainingDetail',
+        component: () => import('@/views/MentalTrainingDetail.vue'),
+        meta: { title: '心理训练详情' }
+      },
+      {
         path: 'insights',
         name: 'Insights',
         component: () => import('@/views/Insights.vue'),
         meta: { title: '深度洞察', requiresPro: true }
+      },
+      {
+        path: 'ai-counselor',
+        name: 'AICounselor',
+        component: () => import('@/views/AICounselor.vue'),
+        meta: { title: 'AI心理咨询师', requiresPro: true }
       },
       {
         path: 'profile',
@@ -66,6 +85,18 @@ const routes: RouteRecordRaw[] = [
         name: 'Settings',
         component: () => import('@/views/Settings.vue'),
         meta: { title: '设置' }
+      },
+      {
+        path: 'cheer',
+        name: 'CheerStation',
+        component: () => import('@/views/CheerStation.vue'),
+        meta: { title: '心灵加油站' }
+      },
+      {
+        path: 'mindfulness/breathing',
+        name: 'MindfulnessBreathing',
+        component: () => import('@/views/mindfulness/BreathingMeditation.vue'),
+        meta: { title: '呼吸冥想' }
       }
     ]
   },
@@ -100,17 +131,45 @@ router.beforeEach(async (to, from, next) => {
   const token = userStore.token
   
   // 检查是否需要登录
-  if (to.meta.requiresAuth !== false && !token) {
-    next({ name: 'Login', query: { redirect: to.fullPath } })
-    return
+  if (to.meta.requiresAuth !== false) {
+    // 如果没有token，直接跳转登录页
+    if (!token) {
+      next({ name: 'Login', query: { redirect: to.fullPath } })
+      return
+    }
+    
+    // 如果有token，验证token是否有效（通过获取用户信息）
+    // 如果用户信息未加载或需要刷新，则先加载
+    if (!userStore.userInfo) {
+      try {
+        await userStore.fetchUserProfile()
+        // 如果获取用户信息失败（token无效），fetchUserProfile会抛出错误
+      } catch (error) {
+        console.error('路由守卫中获取用户信息失败:', error)
+        userStore.clearToken()
+        next({ name: 'Login', query: { redirect: to.fullPath } })
+        return
+      }
+    }
   }
   
   // 已登录用户访问登录页，跳转首页
   if (to.name === 'Login' && token) {
+    // 验证token是否有效
+    if (!userStore.userInfo) {
+      try {
+        await userStore.fetchUserProfile()
+      } catch (error) {
+        // token无效，清除并允许访问登录页
+        userStore.clearToken()
+        next()
+        return
+      }
+    }
     next({ path: '/' })
     return
   }
-  
+
   // 检查是否需要Pro权限
   if (to.meta.requiresPro && !userStore.isPro) {
     ElMessage.warning('此功能仅限Pro会员使用')

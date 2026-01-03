@@ -11,6 +11,7 @@ import com.xinji.exception.BusinessException;
 import com.xinji.mapper.DiaryRepository;
 import com.xinji.repository.mongo.DiaryContentRepository;
 import com.xinji.service.DiaryService;
+import com.xinji.service.ReportService;
 import com.xinji.util.AESUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +37,7 @@ public class DiaryServiceImpl implements DiaryService {
     private final DiaryContentRepository diaryContentRepository;
     private final AESUtil aesUtil;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final ReportService reportService;
     
     private static final String CREATE_LIMIT_PREFIX = "diary:create:limit:";
     
@@ -73,6 +75,11 @@ public class DiaryServiceImpl implements DiaryService {
         
         log.info("日记创建成功: diaryId={}, userId={}, contentLength={}", 
                 diary.getId(), userId, request.getContent().length());
+
+        // 保存正式日记后，异步触发本周AI周报更新（防抖）
+        if (diary.getIsDraft() == 0) {
+            reportService.triggerWeeklyReportRefresh(userId, diary.getDiaryDate());
+        }
         
         return convertToResponse(diary, content, true);
     }
@@ -173,6 +180,11 @@ public class DiaryServiceImpl implements DiaryService {
         }
         
         log.info("日记更新成功: diaryId={}, userId={}", diaryId, userId);
+
+        // 保存正式日记后，异步触发本周AI周报更新（防抖）
+        if (diary.getIsDraft() == 0) {
+            reportService.triggerWeeklyReportRefresh(userId, diary.getDiaryDate());
+        }
         
         DiaryContent content = diaryContentRepository.findById(diaryId).orElse(null);
         return convertToResponse(diary, content, true);

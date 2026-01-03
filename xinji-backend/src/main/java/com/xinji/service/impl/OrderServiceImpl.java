@@ -214,6 +214,49 @@ public class OrderServiceImpl implements OrderService {
     }
     
     @Override
+    @Transactional
+    public OrderResponse mockPay(String userId, String orderId) {
+        Order order = orderRepository.selectById(orderId);
+        if (order == null) {
+            throw BusinessException.notFound("订单不存在");
+        }
+        if (!order.getUserId().equals(userId)) {
+            throw BusinessException.forbidden("无权支付该订单");
+        }
+        if (!"PENDING".equals(order.getStatus())) {
+            throw BusinessException.badRequest("订单状态不允许支付");
+        }
+        if (order.getExpireAt() != null && order.getExpireAt().isBefore(LocalDateTime.now())) {
+            throw BusinessException.badRequest("订单已过期");
+        }
+
+        // 标记订单已支付
+        String transactionId = "MOCK" + System.currentTimeMillis();
+        order.setStatus("PAID");
+        order.setPaymentMethod("MOCK_WECHAT");
+        order.setTransactionId(transactionId);
+        order.setPaidAt(LocalDateTime.now());
+        orderRepository.updateById(order);
+
+        // 写入支付流水（简化）
+        PaymentRecord record = new PaymentRecord();
+        record.setOrderId(orderId);
+        record.setUserId(order.getUserId());
+        record.setPaymentMethod("MOCK_WECHAT");
+        record.setAmount(order.getAmount());
+        record.setTransactionId(transactionId);
+        record.setStatus("PAID");
+        record.setCallbackData("{\"mock\":true}");
+        paymentRecordRepository.insert(record);
+
+        // 激活/续期会员
+        activateMembership(order.getUserId(), order.getPlanType());
+
+        log.info("模拟支付成功: orderId={}, transactionId={}", orderId, transactionId);
+        return convertToResponse(order);
+    }
+
+    @Override
     public OrderResponse queryPaymentStatus(String userId, String orderId) {
         return getOrder(userId, orderId);
     }

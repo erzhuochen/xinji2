@@ -1,6 +1,7 @@
 package com.xinji.dto.response;
 
 import lombok.Data;
+
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -51,9 +52,9 @@ public class WeeklyReportResponse {
     private List<String> keywords;
     
     /**
-     * 周报总结
+     * 周报总结（AI结构化输出）
      */
-    private String summary;
+    private AiWeeklySummary summary;
     
     @Data
     public static class EmotionTrendItem {

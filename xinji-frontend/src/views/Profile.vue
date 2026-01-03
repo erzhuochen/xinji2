@@ -1,44 +1,5 @@
 <template>
   <div class="profile-page">
-    <!-- 用户信息卡片 -->
-    <div class="profile-card">
-      <div class="avatar-section">
-        <el-avatar :size="72" :src="userStore.userInfo?.avatar">
-          {{ userStore.userInfo?.nickname?.charAt(0) || '用' }}
-        </el-avatar>
-        <el-upload
-          class="avatar-uploader"
-          action=""
-          :show-file-list="false"
-          :before-upload="handleAvatarUpload"
-        >
-          <el-button type="primary" link size="small">更换头像</el-button>
-        </el-upload>
-      </div>
-
-      <div class="info-section">
-        <div class="info-item" @click="editNickname">
-          <label>昵称</label>
-          <div class="info-value">
-            <span>{{ userStore.userInfo?.nickname || '未设置' }}</span>
-            <el-icon><ArrowRight /></el-icon>
-          </div>
-        </div>
-        <div class="info-item">
-          <label>手机号</label>
-          <div class="info-value">
-            <span>{{ maskPhone(userStore.userInfo?.phone) }}</span>
-          </div>
-        </div>
-        <div class="info-item">
-          <label>注册时间</label>
-          <div class="info-value">
-            <span>{{ formatDate(userStore.userInfo?.registerTime) }}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- 会员状态 -->
     <div class="membership-card" @click="goMembership">
       <div class="membership-info">
@@ -73,16 +34,36 @@
       </div>
     </div>
 
+    <!-- 用户信息卡片 -->
+    <div class="profile-card">
+      <div class="info-section">
+        <div class="info-item" @click="editNickname">
+          <label>昵称</label>
+          <div class="info-value">
+            <span>{{ userStore.userInfo?.nickname || '未设置' }}</span>
+            <el-icon><ArrowRight /></el-icon>
+          </div>
+        </div>
+        <div class="info-item">
+          <label>手机号</label>
+          <div class="info-value">
+            <span>{{ maskPhone(userStore.userInfo?.phone) }}</span>
+          </div>
+        </div>
+        <div class="info-item">
+          <label>注册时间</label>
+          <div class="info-value">
+            <span>{{ formatDate(userStore.userInfo?.registerTime) }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 功能菜单 -->
     <div class="menu-card">
       <div class="menu-item" @click="goSettings">
         <el-icon><Setting /></el-icon>
         <span>设置</span>
-        <el-icon class="arrow"><ArrowRight /></el-icon>
-      </div>
-      <div class="menu-item" @click="exportData">
-        <el-icon><Download /></el-icon>
-        <span>导出数据</span>
         <el-icon class="arrow"><ArrowRight /></el-icon>
       </div>
       <div class="menu-item" @click="showFeedback">
@@ -130,9 +111,9 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowRight, Setting, Download, ChatDotRound, InfoFilled } from '@element-plus/icons-vue'
+import { ArrowRight, Setting, ChatDotRound, InfoFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
-import { updateProfile, exportUserData, logout } from '@/api/user'
+import { updateProfile, logout } from '@/api/user'
 import dayjs from 'dayjs'
 
 const router = useRouter()
@@ -180,13 +161,6 @@ const saveNickname = async () => {
   }
 }
 
-// 头像上传
-const handleAvatarUpload = async (file: File) => {
-  // TODO: 实现上传到OSS
-  ElMessage.info('头像上传功能开发中')
-  return false
-}
-
 // 跳转会员中心
 const goMembership = () => {
   router.push('/membership')
@@ -195,27 +169,6 @@ const goMembership = () => {
 // 跳转设置
 const goSettings = () => {
   router.push('/settings')
-}
-
-// 导出数据
-const exportData = async () => {
-  try {
-    await ElMessageBox.confirm(
-      '导出将包含您的所有日记数据，确定要导出吗？',
-      '导出数据',
-      { type: 'info' }
-    )
-
-    const res = await exportUserData()
-    ElMessage.success('导出成功，下载链接有效期24小时')
-    
-    // 打开下载链接
-    window.open(res.data.data.exportUrl, '_blank')
-  } catch (error) {
-    if (error !== 'cancel') {
-      console.error('导出失败:', error)
-    }
-  }
 }
 
 // 意见反馈
@@ -269,23 +222,6 @@ const handleLogout = async () => {
   padding: 24px 20px;
   margin-bottom: 16px;
 
-  .avatar-section {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-bottom: 24px;
-
-    .el-avatar {
-      background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-      font-size: 28px;
-      font-weight: 500;
-    }
-
-    .avatar-uploader {
-      margin-top: 8px;
-    }
-  }
-
   .info-section {
     .info-item {
       display: flex;
@@ -324,11 +260,17 @@ const handleLogout = async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+  background: #fff;
+  border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 20px;
   margin-bottom: 16px;
-  color: #fff;
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s;
+  &:hover {
+    box-shadow: var(--shadow-md);
+  }
   cursor: pointer;
 
   .membership-info {

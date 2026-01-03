@@ -41,6 +41,11 @@ public interface OrderService {
     void handleWechatNotify(String requestBody, String signature, String timestamp, String nonce, String serial);
     
     /**
+     * 模拟支付(开发/测试环境)
+     */
+    OrderResponse mockPay(String userId, String orderId);
+
+    /**
      * 查询支付状态
      */
     OrderResponse queryPaymentStatus(String userId, String orderId);

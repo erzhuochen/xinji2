@@ -66,28 +66,23 @@
         </div>
       </div>
 
-      <!-- 正念建议 -->
-      <div class="mindfulness" v-if="report.mindfulnessSuggestions.length > 0">
-        <h2 class="section-title">
-          <el-icon><Cloudy /></el-icon>
-          正念练习推荐
-        </h2>
-        <div class="mindfulness-list">
-          <a 
-            v-for="(item, i) in report.mindfulnessSuggestions" 
-            :key="i"
-            :href="item.url"
-            target="_blank"
-            class="mindfulness-item"
-          >
-            <div class="item-info">
-              <span class="item-title">{{ item.title }}</span>
-              <span class="item-duration">{{ item.duration }}</span>
-            </div>
-            <el-icon><ArrowRight /></el-icon>
-          </a>
+      <!-- AI心理咨询师卡片 -->
+      <div class="insights-list">
+        <div 
+          class="insight-card ai-counselor-card"
+          @click="goToAICounselor"
+        >
+          <div class="insight-header">
+            <span class="insight-type">AI心理咨询师</span>
+            <span class="confidence">
+              <el-icon><ChatDotRound /></el-icon>
+            </span>
+          </div>
+          <h3 class="insight-title">与AI心理咨询师对话</h3>
+          <p class="insight-content">基于您近七天的日记记录，AI心理咨询师将为您提供专业的心理支持和指导</p>
         </div>
       </div>
+
     </template>
 
     <!-- 空状态 -->
@@ -103,9 +98,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Sunrise, Sunny, Cloudy, ArrowRight, TrendCharts } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
+import { Sunrise, Sunny, TrendCharts, ChatDotRound } from '@element-plus/icons-vue'
 import { getInsightsReport } from '@/api/report'
 import type { InsightsReport } from '@/types'
+
+const router = useRouter()
 
 const loading = ref(false)
 const timeRange = ref('MONTH')
@@ -131,7 +129,8 @@ const getInsightTypeLabel = (type: string) => {
     EMOTION_PATTERN: '情绪模式',
     TRIGGER_ANALYSIS: '触发因素',
     GROWTH_TREND: '成长趋势',
-    BEHAVIOR_INSIGHT: '行为洞察'
+    BEHAVIOR_INSIGHT: '行为洞察',
+    COGNITIVE_PATTERN: '认知偏差'
   }
   return typeMap[type] || type
 }
@@ -144,6 +143,11 @@ const getRiskLabel = (risk: string) => {
     HIGH: '高'
   }
   return riskMap[risk] || risk
+}
+
+// 跳转到AI心理咨询师页面
+const goToAICounselor = () => {
+  router.push('/ai-counselor')
 }
 
 onMounted(() => {
@@ -186,6 +190,16 @@ onMounted(() => {
   padding: 20px;
   margin-bottom: 12px;
 
+  &.ai-counselor-card {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+  }
+
   .insight-header {
     display: flex;
     justify-content: space-between;
@@ -203,6 +217,10 @@ onMounted(() => {
     .confidence {
       font-size: 12px;
       color: var(--text-tertiary);
+      
+      .el-icon {
+        color: var(--primary-color);
+      }
     }
   }
 
@@ -312,48 +330,6 @@ onMounted(() => {
   }
 }
 
-// 正念建议
-.mindfulness {
-  background: #fff;
-  border-radius: 16px;
-  padding: 20px;
-
-  .mindfulness-list {
-    .mindfulness-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--border-color);
-      text-decoration: none;
-      color: inherit;
-
-      &:last-child {
-        border-bottom: none;
-      }
-
-      .item-info {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-
-        .item-title {
-          font-size: 14px;
-          color: var(--text-primary);
-        }
-
-        .item-duration {
-          font-size: 12px;
-          color: var(--text-tertiary);
-        }
-      }
-
-      .el-icon {
-        color: var(--text-tertiary);
-      }
-    }
-  }
-}
 
 // 空状态
 .empty-state {

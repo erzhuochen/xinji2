@@ -24,4 +24,9 @@ public interface ReportService {
      * 生成用户周报(定时任务调用)
      */
     void generateWeeklyReports();
+
+    /**
+     * 触发指定日期的周报更新（异步）
+     */
+    void triggerWeeklyReportRefresh(String userId, LocalDate date);
 }

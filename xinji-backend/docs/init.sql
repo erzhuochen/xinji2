@@ -153,6 +153,25 @@ CREATE TABLE `t_ai_quota` (
 -- 8. 周报数据存储在MongoDB (weekly_reports集合)
 
 -- ============================================
+-- 心灵加油站表
+-- ============================================
+DROP TABLE IF EXISTS `t_cheer_quote`;
+CREATE TABLE `t_cheer_quote` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
+    `content` VARCHAR(500) NOT NULL COMMENT '加油语句',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='心灵加油站表';
+
+-- 插入默认加油语句
+INSERT INTO `t_cheer_quote` (`content`) VALUES
+('你已经很棒了，坚持下去！'),
+('给自己一个微笑，新的一天从此开始。'),
+('相信自己，你能做到！'),
+('每一次努力都是在为未来铺路。'),
+('拥抱当下，珍惜此刻。');
+
+-- ============================================
 -- 执行完成提示
 -- ============================================
 SELECT '心迹数据库初始化完成!' AS message;

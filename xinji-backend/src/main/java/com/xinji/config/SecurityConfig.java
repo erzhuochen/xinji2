@@ -71,7 +71,9 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(PUBLIC_PATHS).permitAll()
                 .requestMatchers("/report/insights").hasRole("PRO")
-                .anyRequest().authenticated()
+                .requestMatchers("/counselor/**").hasRole("PRO")
+                .requestMatchers("/auth/logout", "/auth/refresh-token", "/user/**", "/diary/**", "/analysis/**", "/report/**", "/order/**", "/payment/**", "/cheer-quotes/**").authenticated()
+                .anyRequest().denyAll()
             )
             
             // 添加JWT过滤器

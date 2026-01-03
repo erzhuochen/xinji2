@@ -67,7 +67,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, EditPen, DataAnalysis, User, Setting, Medal } from '@element-plus/icons-vue'
+import { ArrowLeft, EditPen, DataAnalysis, User, Setting, Medal, Connection } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 
 const route = useRoute()
@@ -85,6 +85,7 @@ onMounted(async () => {
 const navItems = [
   { path: '/diary', label: '我的日记', icon: EditPen },
   { path: '/report', label: '情绪周报', icon: DataAnalysis },
+  { path: '/mental-training', label: '心理训练', icon: Connection },
   { path: '/insights', label: '深度洞察', icon: Medal },
   { path: '/profile', label: '个人中心', icon: User },
   { path: '/settings', label: '设置', icon: Setting }
@@ -96,6 +97,7 @@ const pageTitleMap: Record<string, string> = {
   '/diary/edit': '写日记',
   '/diary/detail': '日记详情',
   '/report': '情绪周报',
+  '/mental-training': '心理训练',
   '/insights': '深度洞察',
   '/profile': '个人中心',
   '/membership': '会员中心',
@@ -114,7 +116,11 @@ const pageTitle = computed(() => {
 
 // 是否显示返回按钮
 const showBackButton = computed(() => {
-  const noBackPaths = ['/diary', '/report', '/profile']
+  const noBackPaths = ['/diary', '/report', '/mental-training', '/profile']
+  // 如果是心理训练详情页，不显示返回按钮（因为详情页有自己的返回按钮）
+  if (route.path.startsWith('/mental-training/')) {
+    return false
+  }
   return !noBackPaths.includes(route.path)
 })
 

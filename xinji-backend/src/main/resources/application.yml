@@ -26,7 +26,7 @@ spring:
   # MongoDB配置
   data:
     mongodb:
-      uri: mongodb://${MONGO_USERNAME:root}:${MONGO_PASSWORD:123456}@${MONGO_HOST:localhost}:${MONGO_PORT:27017}/${MONGO_DATABASE:xinji}?authSource=admin
+      uri: mongodb://${MONGO_HOST:localhost}:${MONGO_PORT:27017}/${MONGO_DATABASE:xinji}
       
   # Redis配置
   redis:
@@ -119,7 +119,7 @@ logging:
 
 # 跨域配置
 cors:
-  allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+  allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:3000}
   allowed-methods: GET,POST,PUT,DELETE,OPTIONS
   allowed-headers: "*"
   allow-credentials: true

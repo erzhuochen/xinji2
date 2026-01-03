@@ -30,15 +30,21 @@ export const useUserStore = defineStore('user', () => {
   }
   
   const fetchUserProfile = async () => {
-    if (!token.value) return
+    if (!token.value) {
+      throw new Error('未登录')
+    }
     
     try {
       const res = await getUserProfile()
       if (res.code === 200) {
         userInfo.value = res.data
+      } else {
+        throw new Error(res.message || '获取用户信息失败')
       }
     } catch (error) {
       console.error('获取用户信息失败:', error)
+      // 重新抛出错误，让调用者知道token无效
+      throw error
     }
   }
   

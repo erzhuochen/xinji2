@@ -1,21 +1,30 @@
 package com.xinji.service.impl;
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONObject;
+import com.xinji.dto.response.AiWeeklySummary;
 import com.xinji.dto.response.InsightsReportResponse;
 import com.xinji.dto.response.WeeklyReportResponse;
 import com.xinji.entity.Diary;
 import com.xinji.entity.User;
 import com.xinji.entity.mongo.AnalysisResult;
+import com.xinji.entity.mongo.DiaryContent;
 import com.xinji.entity.mongo.WeeklyReport;
 import com.xinji.exception.BusinessException;
 import com.xinji.mapper.DiaryRepository;
 import com.xinji.mapper.UserRepository;
 import com.xinji.repository.mongo.AnalysisResultRepository;
+import com.xinji.repository.mongo.DiaryContentRepository;
 import com.xinji.repository.mongo.WeeklyReportRepository;
 import com.xinji.service.ReportService;
+import com.xinji.util.AESUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -33,14 +42,271 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class ReportServiceImpl implements ReportService {
+
+    @Override
+    public void triggerWeeklyReportRefresh(String userId, LocalDate date) {
+        if (userId == null || date == null) return;
+
+        LocalDate weekStart = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        String lockKey = WEEKLY_REPORT_REGEN_LOCK_PREFIX + userId + ":" + weekStart;
+
+        // 1分钟防抖：锁存在则不重复触发
+        Boolean ok = redisTemplate.opsForValue().setIfAbsent(lockKey, "1", 1, TimeUnit.MINUTES);
+        if (!Boolean.TRUE.equals(ok)) {
+            return;
+        }
+
+        refreshWeeklyReportAsync(userId, weekStart);
+    }
+
+    /**
+     * 异步刷新指定周周报（全文版AI总结）
+     */
+    @org.springframework.scheduling.annotation.Async
+    public void refreshWeeklyReportAsync(String userId, LocalDate weekStart) {
+        try {
+            LocalDate weekEnd = weekStart.plusDays(6);
+
+            // 读取本周日记
+            List<Diary> diaries = diaryRepository.findByUserIdAndDateRange(userId, weekStart, weekEnd);
+            if (diaries.isEmpty()) {
+                // 没有日记则不生成
+                return;
+            }
+
+            // 读取分析结果（用于关键词/情绪统计）
+            List<String> analyzedDiaryIds = diaries.stream()
+                    .filter(d -> d.getAnalyzed() == 1)
+                    .map(Diary::getId)
+                    .toList();
+            List<AnalysisResult> analysisResults = analyzedDiaryIds.isEmpty() ?
+                    Collections.emptyList() :
+                    analysisResultRepository.findByDiaryIdIn(analyzedDiaryIds);
+
+            // 统计
+            Map<String, Integer> emotionDistribution = new HashMap<>();
+            double totalIntensity = 0;
+            for (AnalysisResult ar : analysisResults) {
+                if (ar.getPrimaryEmotion() == null) continue;
+                emotionDistribution.merge(ar.getPrimaryEmotion(), 1, Integer::sum);
+                totalIntensity += ar.getEmotionIntensity() != null ? ar.getEmotionIntensity() : 0;
+            }
+
+            String mostFrequentEmotion = emotionDistribution.entrySet().stream()
+                    .max(Map.Entry.comparingByValue())
+                    .map(Map.Entry::getKey)
+                    .orElse("NEUTRAL");
+            Double avgIntensity = analysisResults.isEmpty() ? null : (totalIntensity / analysisResults.size());
+
+            List<String> keywords = analysisResults.stream()
+                    .flatMap(ar -> ar.getKeywords() != null ? ar.getKeywords().stream() : java.util.stream.Stream.empty())
+                    .collect(Collectors.groupingBy(k -> k, Collectors.counting()))
+                    .entrySet().stream()
+                    .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                    .limit(20)
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toList());
+            keywords = padKeywords(keywords, 20);
+
+            // 全文拼接（做长度控制）
+            String diaryText = buildWeeklyDiaryFullText(diaries);
+
+            // 组装 report 用于 prompt
+            WeeklyReport tmp = new WeeklyReport();
+            tmp.setUserId(userId);
+            tmp.setWeekStart(weekStart);
+            tmp.setWeekEnd(weekEnd);
+            tmp.setDiaryCount(diaries.size());
+            tmp.setAnalyzedCount(analysisResults.size());
+            tmp.setEmotionDistribution(emotionDistribution);
+            tmp.setMostFrequentEmotion(mostFrequentEmotion);
+            tmp.setAverageIntensity(avgIntensity);
+            tmp.setKeywords(keywords);
+
+            AiWeeklySummary aiSummary = generateAISummaryWithFullText(tmp, diaryText);
+
+            // upsert 保存到Mongo weekly_report
+            WeeklyReport report = weeklyReportRepository.findByUserIdAndWeekStart(userId, weekStart)
+                    .orElseGet(() -> {
+                        WeeklyReport r = new WeeklyReport();
+                        r.setId(UUID.randomUUID().toString().replace("-", ""));
+                        r.setUserId(userId);
+                        r.setWeekStart(weekStart);
+                        r.setWeekEnd(weekEnd);
+                        return r;
+                    });
+
+            report.setDiaryCount(diaries.size());
+            report.setAnalyzedCount(analysisResults.size());
+            report.setEmotionDistribution(emotionDistribution);
+            report.setMostFrequentEmotion(mostFrequentEmotion);
+            report.setAverageIntensity(avgIntensity);
+            report.setKeywords(keywords);
+            report.setSummary(JSON.toJSONString(aiSummary));
+            report.setCreatedAt(LocalDateTime.now());
+
+            weeklyReportRepository.save(report);
+
+            // 刷新接口缓存：删除该周缓存，确保立刻生效
+            String cacheKey = WEEKLY_REPORT_CACHE_PREFIX + userId + ":" + weekStart;
+            redisTemplate.delete(cacheKey);
+
+        } catch (Exception e) {
+            log.error("刷新周报失败: userId={}, weekStart={}", userId, weekStart, e);
+        }
+    }
+
+    /**
+     * 拼接本周所有日记正文（解密），并做长度控制，避免prompt过长
+     */
+    private String buildWeeklyDiaryFullText(List<Diary> diaries) {
+        // 控制总长度（字符），避免超token。可按需调整
+        final int MAX_TOTAL_CHARS = 6000;
+        final int MAX_PER_DIARY_CHARS = 800;
+
+        StringBuilder sb = new StringBuilder();
+        int total = 0;
+
+        // 按日期升序拼接
+        List<Diary> sorted = diaries.stream()
+                .sorted(Comparator.comparing(Diary::getDiaryDate))
+                .toList();
+
+        for (Diary d : sorted) {
+            Optional<DiaryContent> contentOpt = diaryContentRepository.findById(d.getId());
+            if (contentOpt.isEmpty()) continue;
+
+            String plain;
+            try {
+                plain = aesUtil.decrypt(contentOpt.get().getContent());
+            } catch (Exception e) {
+                continue;
+            }
+
+            if (plain == null) plain = "";
+            plain = plain.replaceAll("<[^>]+>", "").trim();
+            if (plain.length() > MAX_PER_DIARY_CHARS) {
+                plain = plain.substring(0, MAX_PER_DIARY_CHARS) + "...";
+            }
+
+            String block = "【" + d.getDiaryDate() + "】\n" + plain + "\n\n";
+            if (total + block.length() > MAX_TOTAL_CHARS) {
+                break;
+            }
+
+            sb.append(block);
+            total += block.length();
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * 全文版：在原有统计信息基础上追加“本周日记全文摘要”喂给AI
+     */
+    private AiWeeklySummary generateAISummaryWithFullText(WeeklyReport report, String diaryFullText) {
+        try {
+            String prompt = buildWeeklySummaryPromptWithFullText(report, diaryFullText);
+
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Authorization", "Bearer " + apiKey);
+
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("model", model);
+            requestBody.put("messages", Arrays.asList(
+                    Map.of("role", "system", "content", "你是一个专业的心理咨询师，擅长情绪支持与CBT技巧。请严格按要求输出 JSON。"),
+                    Map.of("role", "user", "content", prompt)
+            ));
+            requestBody.put("response_format", Map.of("type", "json_object"));
+
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+            ResponseEntity<String> response = restTemplate.exchange(DASHSCOPE_API_URL, HttpMethod.POST, entity, String.class);
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                JSONObject jsonResponse = JSON.parseObject(response.getBody());
+                String content = jsonResponse.getJSONArray("choices")
+                        .getJSONObject(0)
+                        .getJSONObject("message")
+                        .getString("content");
+
+                JSONObject obj = JSON.parseObject(content);
+
+                AiWeeklySummary summary = new AiWeeklySummary();
+                summary.setSummary(obj.getString("summary"));
+                summary.setSuggestions(obj.getList("suggestions", String.class));
+                summary.setActionPoints(obj.getList("actionPoints", String.class));
+                return summary;
+            }
+        } catch (Exception e) {
+            log.error("调用AI生成全文周报总结失败", e);
+        }
+
+        return generateLocalSummary(report);
+    }
+
+    private String buildWeeklySummaryPromptWithFullText(WeeklyReport report, String diaryFullText) {
+        String keywordsStr = report.getKeywords() == null || report.getKeywords().isEmpty()
+                ? "(无)"
+                : String.join(", ", report.getKeywords().subList(0, Math.min(5, report.getKeywords().size())));
+
+        return String.format("""
+            请根据以下用户一周的日记全文与统计信息，生成一份温暖、专业且可执行的周报总结，并严格按 JSON 返回。
+
+            日期范围: %s 至 %s
+            日记总数: %d篇
+            分析日记数: %d篇
+            主要情绪(统计): %s
+            平均情绪强度(统计): %s
+            高频关键词(统计): %s
+
+            ===== 本周日记正文（可能已截断） =====
+            %s
+            ===== 结束 =====
+
+            返回 JSON 结构必须严格符合以下 schema（不要输出多余字段，不要输出 markdown，不要用代码块）：
+            {
+              "summary": "一段100-180字的总结，语气温暖、具体、有同理心",
+              "suggestions": ["建议1", "建议2", "建议3"],
+              "actionPoints": ["行动点1", "行动点2"]
+            }
+
+            约束：
+            - 必须结合日记正文中的具体事件/人物/活动，避免只总结情绪标签
+            - suggestions 必须恰好 3 条，每条 18-40 字，具体可操作
+            - actionPoints 必须恰好 2 条，每条以动词开头
+            - 避免诊断口吻，不要给出医疗结论
+            """,
+            report.getWeekStart(),
+            report.getWeekEnd(),
+            report.getDiaryCount(),
+            report.getAnalyzedCount(),
+            translateEmotion(report.getMostFrequentEmotion()),
+            report.getAverageIntensity() == null ? "(无)" : String.format("%.2f", report.getAverageIntensity()),
+            keywordsStr,
+            diaryFullText == null ? "" : diaryFullText
+        );
+    }
+
     
     private final DiaryRepository diaryRepository;
     private final AnalysisResultRepository analysisResultRepository;
     private final WeeklyReportRepository weeklyReportRepository;
+    private final DiaryContentRepository diaryContentRepository;
     private final UserRepository userRepository;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final AESUtil aesUtil;
     
+    @Value("${aliyun.dashscope.api-key}")
+    private String apiKey;
+
+    @Value("${aliyun.dashscope.model:qwen-plus}")
+    private String model;
+
     private static final String WEEKLY_REPORT_CACHE_PREFIX = "report:weekly:";
+    private static final String WEEKLY_REPORT_REGEN_LOCK_PREFIX = "report:weekly:regen:";
+    private static final String DASHSCOPE_API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
     
     @Override
     public WeeklyReportResponse getWeeklyReport(String userId, LocalDate startDate) {
@@ -52,34 +318,37 @@ public class ReportServiceImpl implements ReportService {
             startDate = startDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         }
         LocalDate endDate = startDate.plusDays(6);
-        
-        // 尝试从缓存获取
-        String cacheKey = WEEKLY_REPORT_CACHE_PREFIX + userId + ":" + startDate;
-        Object cached = redisTemplate.opsForValue().get(cacheKey);
-        if (cached instanceof WeeklyReportResponse) {
-            return (WeeklyReportResponse) cached;
-        }
-        
-        // 查询该周的日记
+
+        // 先查 Mongo 已预生成的周报（优先走秒开路径）
+        Optional<WeeklyReport> weeklyReportOpt = weeklyReportRepository.findByUserIdAndWeekStart(userId, startDate);
+
+        // 同时计算本周统计（趋势/分布/关键词等仍可实时或从周报读，这里保留实时计算以确保展示最新）
         List<Diary> diaries = diaryRepository.findByUserIdAndDateRange(userId, startDate, endDate);
-        
-        // 获取已分析的日记ID
+
         List<String> analyzedDiaryIds = diaries.stream()
                 .filter(d -> d.getAnalyzed() == 1)
                 .map(Diary::getId)
                 .collect(Collectors.toList());
-        
-        // 获取分析结果
-        List<AnalysisResult> analysisResults = analyzedDiaryIds.isEmpty() ? 
-                Collections.emptyList() : 
+
+        List<AnalysisResult> analysisResults = analyzedDiaryIds.isEmpty() ?
+                Collections.emptyList() :
                 analysisResultRepository.findByDiaryIdIn(analyzedDiaryIds);
-        
-        // 构建周报数据
+
         WeeklyReportResponse response = buildWeeklyReport(startDate, endDate, diaries, analysisResults);
-        
-        // 缓存结果(7天)
+
+        // 如果 Mongo 里有已生成 summary，则直接用它（避免现场AI）
+        if (weeklyReportOpt.isPresent() && weeklyReportOpt.get().getSummary() != null && !weeklyReportOpt.get().getSummary().isBlank()) {
+            try {
+                response.setSummary(JSON.parseObject(weeklyReportOpt.get().getSummary(), AiWeeklySummary.class));
+            } catch (Exception e) {
+                log.warn("解析Mongo周报summary失败，将使用实时生成的summary: userId={}, weekStart={}", userId, startDate, e);
+            }
+        }
+
+        // 仍保留接口缓存（仅缓存统计+summary对象），但 TTL 可以继续 7 天
+        String cacheKey = WEEKLY_REPORT_CACHE_PREFIX + userId + ":" + startDate;
         redisTemplate.opsForValue().set(cacheKey, response, 7, TimeUnit.DAYS);
-        
+
         return response;
     }
     
@@ -201,13 +470,14 @@ public class ReportServiceImpl implements ReportService {
                         .collect(Collectors.groupingBy(k -> k, Collectors.counting()))
                         .entrySet().stream()
                         .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
-                        .limit(10)
+                        .limit(20)
                         .map(Map.Entry::getKey)
                         .collect(Collectors.toList());
-                report.setKeywords(allKeywords);
+                report.setKeywords(padKeywords(allKeywords, 20));
                 
-                // 生成总结
-                report.setSummary(generateWeeklySummary(report));
+                // 生成AI总结并序列化为JSON字符串
+                AiWeeklySummary aiSummary = generateWeeklySummary(report);
+                report.setSummary(JSON.toJSONString(aiSummary));
                 report.setCreatedAt(LocalDateTime.now());
                 
                 weeklyReportRepository.save(report);
@@ -275,13 +545,14 @@ public class ReportServiceImpl implements ReportService {
                 .collect(Collectors.groupingBy(k -> k, Collectors.counting()))
                 .entrySet().stream()
                 .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
-                .limit(10)
+                .limit(20)
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
-        response.setKeywords(keywords);
+        response.setKeywords(padKeywords(keywords, 20));
         
-        // 生成总结
-        response.setSummary(generateWeeklySummaryFromResponse(response));
+        // summary 由预生成任务写入Mongo后读取；此处不做现场AI（避免打开/report很慢）
+        // 若Mongo没有summary，可在 triggerWeeklyReportRefresh 中异步生成。
+        response.setSummary(null);
         
         return response;
     }
@@ -357,7 +628,7 @@ public class ReportServiceImpl implements ReportService {
         List<InsightsReportResponse.MindfulnessSuggestion> mindfulness = new ArrayList<>();
         InsightsReportResponse.MindfulnessSuggestion breathing = new InsightsReportResponse.MindfulnessSuggestion();
         breathing.setTitle("呼吸冥想");
-        breathing.setDuration("10分钟");
+        breathing.setDuration("5分钟");
         breathing.setUrl("/mindfulness/breathing");
         mindfulness.add(breathing);
         response.setMindfulnessSuggestions(mindfulness);
@@ -366,37 +637,145 @@ public class ReportServiceImpl implements ReportService {
     }
     
     /**
-     * 生成周报总结
+     * 调用AI生成周报总结
      */
-    private String generateWeeklySummary(WeeklyReport report) {
-        if (report.getDiaryCount() == 0) {
-            return "本周没有记录日记，建议养成每天记录的习惯。";
+    private AiWeeklySummary generateAISummary(WeeklyReport report) {
+        try {
+            // 构建提示词
+            String prompt = buildWeeklySummaryPrompt(report);
+            
+            RestTemplate restTemplate = new RestTemplate();
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Authorization", "Bearer " + apiKey);
+            
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("model", model);
+            requestBody.put("messages", Arrays.asList(
+                    Map.of("role", "system", "content", "你是一个专业的心理咨询师，擅长情绪支持与CBT技巧。请严格按用户要求输出 JSON。"),
+                    Map.of("role", "user", "content", prompt)
+            ));
+            // 强制 JSON 输出
+            requestBody.put("response_format", Map.of("type", "json_object"));
+
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+            
+            ResponseEntity<String> response = restTemplate.exchange(
+                    DASHSCOPE_API_URL,
+                    HttpMethod.POST,
+                    entity,
+                    String.class
+            );
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                JSONObject jsonResponse = JSON.parseObject(response.getBody());
+                String content = jsonResponse
+                        .getJSONArray("choices")
+                        .getJSONObject(0)
+                        .getJSONObject("message")
+                        .getString("content");
+                
+                // 解析AI返回的JSON
+                content = content.replaceAll("```(json)?", "").trim();
+                JSONObject obj = JSON.parseObject(content);
+
+                AiWeeklySummary summary = new AiWeeklySummary();
+                summary.setSummary(obj.getString("summary"));
+                summary.setSuggestions(obj.getList("suggestions", String.class));
+                summary.setActionPoints(obj.getList("actionPoints", String.class));
+
+                return summary;
+            }
+        } catch (Exception e) {
+            log.error("调用AI生成周报总结失败", e);
         }
         
-        String emotionDesc = report.getMostFrequentEmotion() != null ? 
-                translateEmotion(report.getMostFrequentEmotion()) : "平静";
-        
-        return String.format("本周共记录了%d篇日记，整体情绪状态以%s为主，平均情绪强度%.2f。%s",
-                report.getDiaryCount(),
-                emotionDesc,
-                report.getAverageIntensity() != null ? report.getAverageIntensity() : 0.5,
-                getEmotionAdvice(report.getMostFrequentEmotion()));
+        // AI调用失败时返回本地生成的总结
+        return generateLocalSummary(report);
     }
     
-    private String generateWeeklySummaryFromResponse(WeeklyReportResponse report) {
+    /**
+     * 构建周报总结提示词
+     */
+    private String buildWeeklySummaryPrompt(WeeklyReport report) {
+        List<String> topKeywords = report.getKeywords() == null ? Collections.emptyList() : report.getKeywords();
+        String keywordsStr = topKeywords.isEmpty()
+                ? "(无)"
+                : String.join(", ", topKeywords.subList(0, Math.min(5, topKeywords.size())));
+
+        return String.format("""
+            请根据以下用户一周的日记数据，生成一份温暖、专业且可执行的周报总结，并严格按 JSON 返回。
+
+            日期范围: %s 至 %s
+            日记总数: %d篇
+            分析日记数: %d篇
+            主要情绪: %s (出现%d次)
+            平均情绪强度: %.2f
+            高频关键词: %s
+
+            返回 JSON 结构必须严格符合以下 schema（不要输出多余字段，不要输出 markdown，不要用代码块）：
+            {
+              "summary": "一段100-180字的总结，语气温暖、具体、有同理心",
+              "suggestions": ["建议1", "建议2", "建议3"],
+              "actionPoints": ["行动点1", "行动点2"]
+            }
+
+            约束：
+            - suggestions 必须恰好 3 条，每条 18-40 字，具体可操作，不要泛泛而谈
+            - actionPoints 必须恰好 2 条，每条以动词开头（如：‘安排/记录/练习/尝试/减少/联系’）
+            - 避免诊断口吻，不要出现‘你有抑郁/焦虑症’等医疗结论
+            """,
+            report.getWeekStart(),
+            report.getWeekEnd(),
+            report.getDiaryCount(),
+            report.getAnalyzedCount(),
+            translateEmotion(report.getMostFrequentEmotion()),
+            report.getEmotionDistribution() == null ? 0 : report.getEmotionDistribution().getOrDefault(report.getMostFrequentEmotion(), 0),
+            report.getAverageIntensity() != null ? report.getAverageIntensity() : 0.5,
+            keywordsStr
+        );
+    }
+    
+    /**
+     * 本地生成周报总结（降级方案）
+     */
+    private AiWeeklySummary generateLocalSummary(WeeklyReport report) {
+        AiWeeklySummary summary = new AiWeeklySummary();
+
         if (report.getDiaryCount() == 0) {
-            return "本周没有记录日记，建议养成每天记录的习惯。";
+            summary.setSummary("本周没有记录日记，建议养成每天记录的习惯。");
+            summary.setSuggestions(Arrays.asList("试着记录今天发生的一件小事。", "不用担心写得好不好，真实感受最重要。", "如果不知从何写起，可以描述一个场景或一种感觉。"));
+            summary.setActionPoints(Arrays.asList("写一篇50字以上的日记", "设定一个明天写日记的提醒"));
+            return summary;
         }
-        
-        String emotionDesc = report.getMostFrequentEmotion() != null ? 
+
+        String emotionDesc = report.getMostFrequentEmotion() != null ?
                 translateEmotion(report.getMostFrequentEmotion()) : "平静";
-        
-        return String.format("本周共记录了%d篇日记，整体情绪状态以%s为主，平均情绪强度%.2f。%s",
+
+        String summaryText = String.format("本周共记录了%d篇日记，整体情绪状态以%s为主，平均情绪强度%.2f。",
                 report.getDiaryCount(),
                 emotionDesc,
-                report.getAverageIntensity() != null ? report.getAverageIntensity() : 0.5,
-                getEmotionAdvice(report.getMostFrequentEmotion()));
+                report.getAverageIntensity() != null ? report.getAverageIntensity() : 0.5);
+
+        summary.setSummary(summaryText);
+        summary.setSuggestions(Arrays.asList(getEmotionAdvice(report.getMostFrequentEmotion()), "回顾一下本周让你开心的瞬间。", "思考一下，是什么触发了你的主要情绪？"));
+        summary.setActionPoints(Arrays.asList("继续保持记录，关注自己的情绪变化", "挑选一个建议，在本周尝试一下"));
+
+        return summary;
     }
+    
+    private AiWeeklySummary generateWeeklySummary(WeeklyReport report) {
+        // 优先使用AI生成总结，失败时降级到本地规则
+        try {
+            return generateAISummary(report);
+        } catch (Exception e) {
+            log.error("生成周报总结时出错，使用本地规则", e);
+            return generateLocalSummary(report);
+        }
+    }
+    
+
     
     private String translateEmotion(String emotion) {
         if (emotion == null) return "平静";
@@ -428,6 +807,21 @@ public class ReportServiceImpl implements ReportService {
         };
     }
     
+    /**
+     * 若关键词不足 targetSize，则循环填充至固定长度
+     */
+    private List<String> padKeywords(List<String> src, int targetSize) {
+        if (src == null) return Collections.emptyList();
+        if (src.size() >= targetSize || src.isEmpty()) return src;
+        List<String> padded = new ArrayList<>(src);
+        int idx = 0;
+        while (padded.size() < targetSize) {
+            padded.add(src.get(idx % src.size()));
+            idx++;
+        }
+        return padded;
+    }
+
     private String getEmotionAdvice(String emotion) {
         if (emotion == null) return "";
         return switch (emotion) {
