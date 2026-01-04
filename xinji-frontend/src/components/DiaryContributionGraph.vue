@@ -43,38 +43,18 @@ const hoveredDay = ref<DayData | null>(null)
 const tooltipStyle = ref({ top: '0px', left: '0px' })
 const graphGridRef = ref<HTMLElement>()
 
-// 获取一年的日期数据（类似 GitHub，从一年前的第一个周日开始）
+// 获取一年的日期数据（从今天往前推371天）
 const generateYearDates = () => {
   const dates: DayData[] = []
-  const today = dayjs()
-  const oneYearAgo = today.subtract(1, 'year')
+  const today = dayjs().startOf('day')
+  const targetDays = 53 * 7 // 53周 = 371天
   
-  // 找到一年前的第一个周日（GitHub 风格）
-  let startDate = oneYearAgo.startOf('day')
-  const dayOfWeek = startDate.day() // 0 = 周日, 1 = 周一...
+  // 从今天往前推371天，得到起始日期（不一定是周日）
+  const startDate = today.subtract(targetDays - 1, 'day').startOf('day')
   
-  // 如果第一天不是周日，往前找到最近的周日
-  if (dayOfWeek !== 0) {
-    startDate = startDate.subtract(dayOfWeek, 'day')
-  }
-  
-  // 计算需要显示的总天数（53周 * 7天 = 371天，但实际可能少一些）
-  const endDate = today
-  let current = startDate.startOf('day')
-  
-  // 生成从开始日期到今天的日期
-  while (current.isBefore(endDate) || current.isSame(endDate, 'day')) {
-    dates.push({
-      date: current.format('YYYY-MM-DD'),
-      count: 0,
-      level: 0
-    })
-    current = current.add(1, 'day')
-  }
-  
-  // 如果不足53周，补齐到53周（371天）
-  const targetDays = 53 * 7
-  while (dates.length < targetDays) {
+  // 从起始日期开始生成正好371天的数据（包含今天）
+  let current = startDate
+  for (let i = 0; i < targetDays; i++) {
     dates.push({
       date: current.format('YYYY-MM-DD'),
       count: 0,

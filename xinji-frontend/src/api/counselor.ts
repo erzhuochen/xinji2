@@ -15,3 +15,8 @@ export const sendCounselorMessage = (message: string) => {
   return request.post<ApiResponse<{ reply: string }>>('/counselor/chat', { message }).then(res => res.data)
 }
 
+
+
+
+
+

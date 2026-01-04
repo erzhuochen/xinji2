@@ -131,7 +131,16 @@ const report = ref<WeeklyReport | null>(null)
 const getMonday = (d: dayjs.Dayjs) => {
   // day(): 0 周日,1 周一...
   const day = d.day()
-  return day === 1 ? d.startOf('day') : d.startOf('week').add(1, 'day')
+  // 如果是周一，直接返回当天的开始
+  if (day === 1) {
+    return d.startOf('day')
+  }
+  // 如果是周日(day=0)，需要回到上周一
+  if (day === 0) {
+    return d.subtract(6, 'day').startOf('day')
+  }
+  // 其他情况，减去(day-1)天得到本周一
+  return d.subtract(day - 1, 'day').startOf('day')
 }
 const currentWeekStart = ref(getMonday(dayjs()))
 
@@ -151,7 +160,8 @@ const weekLabel = computed(() => {
 
 // 是否是当前周
 const isCurrentWeek = computed(() => {
-  return currentWeekStart.value.isSame(dayjs().startOf('week'), 'day')
+  const todayMonday = getMonday(dayjs())
+  return currentWeekStart.value.isSame(todayMonday, 'day')
 })
 
 // 上一周

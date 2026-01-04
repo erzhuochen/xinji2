@@ -14,48 +14,6 @@
       </div>
     </div>
 
-    <!-- 通知设置 -->
-    <div class="settings-section">
-      <h3 class="section-title">通知设置</h3>
-      <div class="settings-card">
-        <div class="setting-item">
-          <span class="setting-label">每日提醒</span>
-          <el-switch v-model="settings.dailyReminder" @change="saveSettings" />
-        </div>
-        <div class="setting-item" v-if="settings.dailyReminder">
-          <span class="setting-label">提醒时间</span>
-          <el-time-picker
-            v-model="settings.reminderTime"
-            format="HH:mm"
-            placeholder="选择时间"
-            @change="saveSettings"
-          />
-        </div>
-        <div class="setting-item">
-          <span class="setting-label">周报推送</span>
-          <el-switch v-model="settings.weeklyReport" @change="saveSettings" />
-        </div>
-      </div>
-    </div>
-
-    <!-- 隐私设置 -->
-    <div class="settings-section">
-      <h3 class="section-title">隐私设置</h3>
-      <div class="settings-card">
-        <div class="setting-item">
-          <span class="setting-label">日记加密</span>
-          <el-switch v-model="settings.diaryEncryption" @change="saveSettings" />
-        </div>
-        <div class="setting-item" v-if="settings.diaryEncryption">
-          <span class="setting-label">访问密码</span>
-          <div class="setting-value" @click="setPassword">
-            <span>{{ settings.hasPassword ? '已设置' : '未设置' }}</span>
-            <el-icon><ArrowRight /></el-icon>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- 数据管理 -->
     <div class="settings-section">
       <h3 class="section-title">数据管理</h3>
@@ -159,13 +117,7 @@ const showDeleteDialog = ref(false)
 const deleting = ref(false)
 const deleteCountdown = ref(0)
 
-const settings = reactive({
-  dailyReminder: true,
-  reminderTime: '21:00',
-  weeklyReport: true,
-  diaryEncryption: false,
-  hasPassword: false
-})
+const settings = reactive({})
 
 const deleteForm = reactive({
   phone: '',
@@ -222,11 +174,6 @@ const calcCacheSize = () => {
 // 绑定手机号
 const showBindPhone = () => {
   ElMessage.info('更换手机号功能开发中')
-}
-
-// 设置密码
-const setPassword = () => {
-  ElMessage.info('访问密码功能开发中')
 }
 
 // 清除缓存
